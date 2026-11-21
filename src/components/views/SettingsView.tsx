@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Save,
   CheckCircle,
@@ -17,6 +17,9 @@ import {
 } from 'lucide-react';
 import type { AgencySettings } from '../../types';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../auth/use-auth';
+import { authClient } from '../../lib/auth-client';
+import { updateAdminProfile } from '../../api/admin';
 import brandLogo from '../../assets/images/brand-logo.png';
 
 interface SettingsViewProps {
@@ -31,20 +34,27 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   onSaveSettings,
 }) => {
   const { theme, setTheme, toggleTheme } = useTheme();
+  const { adminUser, refreshSession } = useAuth();
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile-security');
   const [formData, setFormData] = useState<AgencySettings>(initialSettings);
   const [agencySavedSuccess, setAgencySavedSuccess] = useState(false);
 
-  // Admin Profile State
-  const [adminName, setAdminName] = useState('Elena Rostova');
-  const [adminEmail, setAdminEmail] = useState('superadmin@krikotrip.com');
-  const [adminPhone, setAdminPhone] = useState('+91 98300 12345');
-  const [adminAvatar, setAdminAvatar] = useState(
-    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80'
-  );
+  const [adminName, setAdminName] = useState(adminUser?.name || '');
+  const [adminEmail, setAdminEmail] = useState(adminUser?.email || '');
+  const [adminPhone, setAdminPhone] = useState(adminUser?.phone || '');
+  const [adminAvatar, setAdminAvatar] = useState(adminUser?.avatarUrl || '');
   const [profileSavedSuccess, setProfileSavedSuccess] = useState(false);
+  const [profileError, setProfileError] = useState('');
 
-  // Password Change Form State
+  useEffect(() => {
+    if (adminUser) {
+      setAdminName(adminUser.name);
+      setAdminEmail(adminUser.email);
+      setAdminPhone(adminUser.phone || '');
+      setAdminAvatar(adminUser.avatarUrl || '');
+    }
+  }, [adminUser]);
+
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -54,13 +64,23 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState(false);
 
-  const handleProfileSubmit = (e: React.FormEvent) => {
+  const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setProfileSavedSuccess(true);
-    setTimeout(() => setProfileSavedSuccess(false), 3000);
+    setProfileError('');
+    try {
+      if (adminName && adminName !== adminUser?.name) {
+        await authClient.updateUser({ name: adminName });
+      }
+      await updateAdminProfile({ phone: adminPhone || null });
+      await refreshSession();
+      setProfileSavedSuccess(true);
+      setTimeout(() => setProfileSavedSuccess(false), 3000);
+    } catch {
+      setProfileError('Failed to save profile changes. Please try again.');
+    }
   };
 
-  const handlePasswordSubmit = (e: React.FormEvent) => {
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setPasswordError('');
     setPasswordSuccess(false);
@@ -70,8 +90,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       return;
     }
 
-    if (newPassword.length < 8) {
-      setPasswordError('New password must be at least 8 characters long.');
+    if (newPassword.length < 14) {
+      setPasswordError('New password must be at least 14 characters long.');
       return;
     }
 
@@ -80,12 +100,26 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
       return;
     }
 
-    // Success simulation
-    setPasswordSuccess(true);
-    setCurrentPassword('');
-    setNewPassword('');
-    setConfirmPassword('');
-    setTimeout(() => setPasswordSuccess(false), 4000);
+    try {
+      const res = await authClient.changePassword({
+        currentPassword,
+        newPassword,
+        revokeOtherSessions: true,
+      });
+
+      if (res?.error) {
+        setPasswordError(res.error.message || 'Failed to update password.');
+        return;
+      }
+
+      setPasswordSuccess(true);
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setTimeout(() => setPasswordSuccess(false), 4000);
+    } catch {
+      setPasswordError('Unable to update password. Please check your credentials.');
+    }
   };
 
   const handleAgencySubmit = (e: React.FormEvent) => {
@@ -183,40 +217,36 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </div>
             )}
 
+            {profileError && (
+              <div className="p-3.5 rounded-[4px] bg-rose-50 dark:bg-rose-950/70 text-rose-800 dark:text-rose-200 border border-rose-200 dark:border-rose-800 flex items-center gap-2.5 text-xs font-semibold">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>{profileError}</span>
+              </div>
+            )}
+
             <form onSubmit={handleProfileSubmit} className="space-y-4">
-              {/* Profile Avatar Row */}
               <div className="flex items-center gap-4 p-3 rounded-[4px] bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
-                <img
-                  src={adminAvatar}
-                  alt={adminName}
-                  className="w-16 h-16 rounded-full object-cover ring-4 ring-blue-500/20 shrink-0"
-                />
+                {adminAvatar ? (
+                  <img
+                    src={adminAvatar}
+                    alt={adminName}
+                    className="w-16 h-16 rounded-full object-cover ring-4 ring-blue-500/20 shrink-0"
+                  />
+                ) : (
+                  <div className="w-16 h-16 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center text-xl ring-4 ring-blue-500/20 shrink-0">
+                    {adminName ? adminName.charAt(0).toUpperCase() : 'A'}
+                  </div>
+                )}
                 <div className="space-y-1">
                   <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 block">
                     Profile Avatar Photo
                   </span>
                   <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    Displayed in the top navigation bar and admin session audit logs.
+                    Displayed in the top navigation bar, sidebar, and admin session audit logs.
                   </p>
-                  <div className="flex items-center gap-2 pt-1">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setAdminAvatar(
-                          adminAvatar.includes('1534528741775')
-                            ? 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120&q=80'
-                            : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80'
-                        )
-                      }
-                      className="text-xs font-semibold text-blue-600 hover:underline cursor-pointer"
-                    >
-                      Toggle Avatar Style
-                    </button>
-                  </div>
                 </div>
               </div>
 
-              {/* Input Fields */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                 <div>
                   <label className="block font-semibold mb-1 text-slate-700 dark:text-slate-300 text-xs">
@@ -240,12 +270,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   </label>
                   <input
                     type="email"
-                    required
+                    readOnly
                     value={adminEmail}
-                    onChange={(e) => setAdminEmail(e.target.value)}
-                    className={`w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none ${theme === 'dark'
-                      ? 'bg-slate-800 border-slate-700 text-white'
-                      : 'bg-slate-50 border-slate-200 text-slate-900'
+                    className={`w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none opacity-80 cursor-not-allowed ${theme === 'dark'
+                      ? 'bg-slate-800/60 border-slate-700 text-slate-300'
+                      : 'bg-slate-100 border-slate-200 text-slate-600'
                       }`}
                   />
                 </div>
@@ -258,6 +287,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     type="text"
                     value={adminPhone}
                     onChange={(e) => setAdminPhone(e.target.value)}
+                    placeholder="+91 98765 43210"
                     className={`w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none ${theme === 'dark'
                       ? 'bg-slate-800 border-slate-700 text-white'
                       : 'bg-slate-50 border-slate-200 text-slate-900'

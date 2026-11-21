@@ -15,9 +15,11 @@ import {
   Building2,
   Star,
   Bot,
+  LogOut,
 } from 'lucide-react';
 import type { NavigationKey, NavItem } from '../../types';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../auth/use-auth';
 import brandLogo from '../../assets/images/brand-logo.png';
 
 interface SidebarProps {
@@ -38,6 +40,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onCloseMobile,
 }) => {
   const { theme } = useTheme();
+  const { adminUser, signOut } = useAuth();
 
   const navItems: NavItem[] = [
     {
@@ -129,6 +132,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   };
 
+  const adminDisplayName = adminUser?.name || 'Super Admin';
+  const initialLetter = adminDisplayName.charAt(0).toUpperCase();
+
   const sidebarContent = (
     <div
       className={`h-full flex flex-col justify-between select-none transition-colors duration-200 ${theme === 'dark'
@@ -136,7 +142,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         : 'bg-white border-r border-slate-200 text-slate-800'
         }`}
     >
-      {/* Top Header / Branding */}
       <div>
         <div
           className={`h-16 px-4 flex items-center justify-between border-b ${theme === 'dark' ? 'border-slate-800' : 'border-slate-200'
@@ -159,19 +164,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                <div className="">
-                  <img
-                    src={brandLogo}
-                    alt="KrikoTrip"
-                    className="w-auto max-w-[140px] object-contain"
-                  />
-                </div>
-
+                <img
+                  src={brandLogo}
+                  alt="KrikoTrip"
+                  className="w-auto max-w-[140px] object-contain"
+                />
               </div>
             )}
           </div>
 
-          {/* Mobile Close Button */}
           <button
             onClick={onCloseMobile}
             className="lg:hidden p-1.5 rounded-[4px] text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-white"
@@ -180,7 +181,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <X className="w-5 h-5" />
           </button>
 
-          {/* Desktop Collapse Toggle */}
           {!isCollapsed && (
             <button
               onClick={onToggleCollapse}
@@ -192,7 +192,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
         </div>
 
-        {/* Navigation List - Enhanced Font Size & Spacing (Direct 1-Click Navigation, No Dropdown Boxes) */}
         <nav className="p-3 space-y-1.5 overflow-y-auto max-h-[calc(100vh-180px)]">
           {navItems.map((item) => {
             const isActive = currentTab === item.id;
@@ -220,7 +219,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   </div>
                 </button>
 
-                {/* Tooltip when collapsed */}
                 {isCollapsed && (
                   <div className="hidden group-hover:flex absolute left-full ml-2 px-2.5 py-1.5 rounded-[4px] bg-slate-900 text-white text-xs font-semibold whitespace-nowrap z-50 items-center gap-1.5 border border-slate-700 shadow-sm pointer-events-none">
                     <span>{item.label}</span>
@@ -232,66 +230,93 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </nav>
       </div>
 
-      {/* Bottom Footer Section: Profile & Branding */}
       <div
         className={`p-3 border-t ${theme === 'dark' ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-slate-50'
           }`}
       >
         {!isCollapsed ? (
-          /* Expanded: Show Profile Icon and Name - No border */
           <div
-            onClick={() => onSelectTab('settings')}
-            className={`p-2.5 rounded-[4px] flex items-center justify-between cursor-pointer transition-colors ${theme === 'dark'
-              ? 'bg-slate-800/80 hover:bg-slate-800 text-slate-100'
-              : 'bg-white shadow-xs hover:bg-blue-50/60 text-slate-800'
+            className={`p-2.5 rounded-lg flex items-center justify-between transition-colors ${theme === 'dark'
+              ? 'bg-slate-800/80 text-slate-100'
+              : 'bg-white shadow-xs text-slate-800'
               }`}
-            title="Open Admin Profile & Settings"
           >
-            <div className="flex items-center gap-2.5 overflow-hidden">
-              <img
-                src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80"
-                alt="KrikoTrip Super Admin"
-                className="w-8 h-8 rounded-full object-cover ring-2 ring-blue-500/20 shrink-0"
-              />
-              <div className="flex flex-col truncate">
+            <div
+              onClick={() => onSelectTab('settings')}
+              className="flex items-center gap-2.5 overflow-hidden cursor-pointer min-w-0"
+              title="Open Admin Profile & Settings"
+            >
+              {adminUser?.avatarUrl ? (
+                <img
+                  src={adminUser.avatarUrl}
+                  alt={adminDisplayName}
+                  className="w-8 h-8 rounded-full object-cover ring-2 ring-blue-500/20 shrink-0"
+                />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-blue-600 text-white font-semibold flex items-center justify-center text-xs ring-2 ring-blue-500/20 shrink-0">
+                  {initialLetter}
+                </div>
+              )}
+              <div className="flex flex-col truncate min-w-0">
                 <span className="text-sm font-semibold truncate">
-                  KrikoTrip Super Admin
+                  {adminDisplayName}
                 </span>
-                <span className="text-xs text-blue-600 dark:text-blue-400 font-semibold truncate">
-                  Super Admin Panel
+                <span className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                  {adminUser?.email || 'Super Admin'}
                 </span>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onSelectTab('settings');
-              }}
-              className="p-1.5 rounded-[4px] text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-700/60 transition-colors cursor-pointer"
-              title="Settings"
-            >
-              <SettingsIcon className="w-4 h-4" />
-            </button>
+
+            <div className="flex items-center gap-1 shrink-0 ml-2">
+              <button
+                type="button"
+                onClick={() => onSelectTab('settings')}
+                className="p-1.5 rounded-md text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-700/60 transition-colors cursor-pointer"
+                title="Settings"
+              >
+                <SettingsIcon className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => void signOut()}
+                className="p-1.5 rounded-md text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors cursor-pointer"
+                title="Sign Out"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         ) : (
-          /* Collapsed: Only show the Logo */
           <div className="flex flex-col items-center gap-2 py-0.5">
             <button
-              onClick={onToggleCollapse}
-              title="KrikoTrip Super Admin (Click to expand)"
-              className="w-10 h-10 rounded-[4px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center p-1.5 shrink-0 hover:border-blue-500 hover:bg-blue-50/50 dark:hover:bg-slate-700 transition-all cursor-pointer"
+              onClick={() => onSelectTab('settings')}
+              title={`Settings (${adminDisplayName})`}
+              className="w-10 h-10 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center p-1.5 shrink-0 hover:border-blue-500 hover:bg-blue-50/50 dark:hover:bg-slate-700 transition-all cursor-pointer"
             >
-              <img
-                src="/favicon.ico"
-                alt="KrikoTrip Logo"
-                className="w-7 h-7 object-contain"
-              />
+              {adminUser?.avatarUrl ? (
+                <img
+                  src={adminUser.avatarUrl}
+                  alt={adminDisplayName}
+                  className="w-7 h-7 rounded-full object-cover"
+                />
+              ) : (
+                <div className="w-7 h-7 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center text-xs">
+                  {initialLetter}
+                </div>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => void signOut()}
+              className="w-full flex items-center justify-center p-1.5 rounded-md border border-slate-200 dark:border-slate-800 text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors cursor-pointer"
+              title="Sign Out"
+            >
+              <LogOut className="w-4 h-4" />
             </button>
             <button
               type="button"
               onClick={onToggleCollapse}
-              className="w-full flex items-center justify-center p-1.5 rounded-[4px] border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              className="w-full flex items-center justify-center p-1.5 rounded-[4px] border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
               title="Expand sidebar"
             >
               <ChevronRight className="w-4 h-4" />
@@ -304,7 +329,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <>
-      {/* Desktop Sidebar */}
       <aside
         className={`hidden lg:block fixed top-0 left-0 bottom-0 z-30 transition-all duration-200 ${isCollapsed ? 'w-18' : 'w-64'
           }`}
@@ -312,7 +336,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {sidebarContent}
       </aside>
 
-      {/* Mobile Drawer Backdrop */}
       {mobileOpen && (
         <div
           onClick={onCloseMobile}
@@ -320,7 +343,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         />
       )}
 
-      {/* Mobile Drawer Sidebar */}
       <aside
         className={`fixed top-0 bottom-0 left-0 w-64 z-50 lg:hidden transform transition-transform duration-200 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'
           }`}

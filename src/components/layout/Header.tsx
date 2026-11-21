@@ -9,9 +9,12 @@ import {
   Star,
   Users,
   MessageSquare,
+  LogOut,
+  Settings as SettingsIcon,
 } from 'lucide-react';
 import type { NavigationKey } from '../../types';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../auth/use-auth';
 
 interface HeaderProps {
   currentTab: NavigationKey;
@@ -103,14 +106,16 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenMobileSidebar,
 }) => {
   const { theme, toggleTheme } = useTheme();
+  const { adminUser, signOut } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>(initialNotifications);
   const notificationRef = useRef<HTMLDivElement>(null);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
   const currentTitle = tabTitles[currentTab] || 'Admin';
 
-  // Close notifications popover on click outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -119,14 +124,20 @@ export const Header: React.FC<HeaderProps> = ({
       ) {
         setShowNotifications(false);
       }
+      if (
+        profileMenuRef.current &&
+        !profileMenuRef.current.contains(event.target as Node)
+      ) {
+        setShowProfileMenu(false);
+      }
     };
-    if (showNotifications) {
+    if (showNotifications || showProfileMenu) {
       document.addEventListener('mousedown', handleClickOutside);
     }
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [showNotifications]);
+  }, [showNotifications, showProfileMenu]);
 
   const handleMarkAllAsRead = () => {
     setNotifications((prev) => prev.map((item) => ({ ...item, read: true })));
@@ -155,6 +166,9 @@ export const Header: React.FC<HeaderProps> = ({
     }
   };
 
+  const adminDisplayName = adminUser?.name || 'Super Admin';
+  const initialLetter = adminDisplayName.charAt(0).toUpperCase();
+
   return (
     <header
       className={`sticky top-0 z-20 transition-colors duration-200 border-b ${theme === 'dark'
@@ -163,53 +177,48 @@ export const Header: React.FC<HeaderProps> = ({
         }`}
     >
       <div className="px-3 sm:px-6 h-14 sm:h-16 flex items-center justify-between gap-2 sm:gap-4">
-        {/* Left: Mobile Toggle & Page Title */}
-        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 mr-2">
+        <div className="flex items-center gap-2 sm:gap-4 min-w-0">
           <button
             onClick={onOpenMobileSidebar}
-            className="lg:hidden p-1.5 sm:p-2 rounded-[4px] text-slate-600 hover:text-blue-600 dark:text-slate-300 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0 cursor-pointer"
-            aria-label="Open menu"
+            className="lg:hidden p-1.5 sm:p-2 rounded-[4px] text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer shrink-0"
+            aria-label="Open Navigation Menu"
           >
             <Menu className="w-5 h-5" />
           </button>
 
-          <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
-            <div className="lg:hidden w-7 h-7 sm:w-8 sm:h-8 rounded-[4px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center p-1 shrink-0">
-              <img src="/favicon.ico" alt="KrikoTrip" className="w-4 h-4 sm:w-5 sm:h-5 object-contain" />
-            </div>
-            <h1 className="text-sm sm:text-base md:text-lg lg:text-xl font-semibold tracking-tight text-slate-900 dark:text-white whitespace-nowrap truncate overflow-hidden">
-              <span className="md:hidden block truncate">{mobileTabTitles[currentTab] || currentTitle}</span>
-              <span className="hidden md:inline truncate">{currentTitle}</span>
+          <div className="min-w-0">
+            <h1 className="text-sm sm:text-lg font-bold text-slate-900 dark:text-white truncate tracking-tight hidden sm:block">
+              {currentTitle}
             </h1>
+            <h1 className="text-sm font-bold text-slate-900 dark:text-white truncate tracking-tight sm:hidden">
+              {mobileTabTitles[currentTab] || currentTitle}
+            </h1>
+            <p className="hidden md:block text-[11px] text-slate-400 dark:text-slate-400 mt-0.5 truncate">
+              KrikoTrip Central Travel Management Engine
+            </p>
           </div>
         </div>
 
-        {/* Right Actions */}
-        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
-          {/* Notification Button & Popover */}
+        <div className="flex items-center gap-1 sm:gap-2.5 shrink-0">
           <div className="relative" ref={notificationRef}>
             <button
               onClick={() => setShowNotifications(!showNotifications)}
-              className={`relative p-2 rounded-[4px] transition-colors cursor-pointer ${theme === 'dark'
-                ? 'text-slate-300 hover:text-white hover:bg-slate-800'
-                : 'text-slate-600 hover:text-blue-600 hover:bg-slate-100'
+              className={`p-2 rounded-[4px] relative transition-colors cursor-pointer ${showNotifications
+                ? 'bg-blue-50 text-blue-600 dark:bg-slate-800 dark:text-blue-400'
+                : 'text-slate-600 hover:text-blue-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'
                 }`}
               title="Notifications"
-              aria-label="View notifications"
             >
               <Bell className="w-4 h-4 sm:w-5 sm:h-5" />
               {unreadCount > 0 && (
-                <span className="absolute top-1 right-1 w-4 h-4 text-[10px] font-bold bg-rose-500 text-white rounded-full flex items-center justify-center ring-2 ring-white dark:ring-slate-900">
-                  {unreadCount}
-                </span>
+                <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-blue-600 ring-2 ring-white dark:ring-slate-900" />
               )}
             </button>
 
-            {/* Notification Dropdown Panel */}
             {showNotifications && (
               <div
-                className={`absolute right-0 mt-2 w-80 sm:w-96 rounded-[4px] border z-50 shadow-lg ${theme === 'dark'
-                  ? 'bg-slate-900 border-slate-800 text-slate-200'
+                className={`absolute right-0 mt-2 w-80 sm:w-96 rounded-xl shadow-xl border overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-100 ${theme === 'dark'
+                  ? 'bg-slate-900 border-slate-800 text-slate-100'
                   : 'bg-white border-slate-200 text-slate-800'
                   }`}
               >
@@ -277,7 +286,6 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </div>
 
-          {/* Theme Switcher Button - No border */}
           <button
             onClick={toggleTheme}
             className={`p-2 rounded-[4px] transition-colors cursor-pointer ${theme === 'dark'
@@ -289,23 +297,78 @@ export const Header: React.FC<HeaderProps> = ({
             {theme === 'dark' ? <Sun className="w-4 h-4 sm:w-5 sm:h-5" /> : <Moon className="w-4 h-4 sm:w-5 sm:h-5" />}
           </button>
 
-          {/* User Profile - Only icon and name, no dropdown menu */}
-          <div
-            onClick={() => onSelectTab('settings')}
-            className={`flex items-center gap-2 p-1 sm:p-1.5 rounded-[4px] transition-colors cursor-pointer ${theme === 'dark'
-              ? 'hover:bg-slate-800 text-slate-100'
-              : 'hover:bg-slate-100 text-slate-800'
-              }`}
-            title="Settings & Admin Profile"
-          >
-            <img
-              src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80"
-              alt="KrikoTrip Super Admin"
-              className="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover ring-2 ring-blue-500/20 shrink-0"
-            />
-            <span className="hidden sm:inline text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-100">
-              KrikoTrip Admin Panel
-            </span>
+          <div className="relative" ref={profileMenuRef}>
+            <button
+              type="button"
+              onClick={() => setShowProfileMenu(!showProfileMenu)}
+              className={`flex items-center gap-2 p-1 sm:p-1.5 rounded-lg transition-colors cursor-pointer ${theme === 'dark'
+                ? 'hover:bg-slate-800 text-slate-100'
+                : 'hover:bg-slate-100 text-slate-800'
+                }`}
+              title="Admin Profile Menu"
+            >
+              {adminUser?.avatarUrl ? (
+                <img
+                  src={adminUser.avatarUrl}
+                  alt={adminDisplayName}
+                  className="w-7 h-7 sm:w-8 sm:h-8 rounded-full object-cover ring-2 ring-blue-500/20 shrink-0"
+                />
+              ) : (
+                <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-blue-600 text-white font-semibold flex items-center justify-center text-xs ring-2 ring-blue-500/20 shrink-0">
+                  {initialLetter}
+                </div>
+              )}
+              <span className="hidden sm:inline text-xs sm:text-sm font-semibold text-slate-800 dark:text-slate-100 max-w-[130px] truncate">
+                {adminDisplayName}
+              </span>
+            </button>
+
+            {showProfileMenu && (
+              <div
+                className={`absolute right-0 mt-2 w-56 rounded-xl shadow-xl border overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-100 ${theme === 'dark'
+                  ? 'bg-slate-900 border-slate-800 text-slate-100'
+                  : 'bg-white border-slate-200 text-slate-800'
+                  }`}
+              >
+                <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-800">
+                  <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">
+                    {adminDisplayName}
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                    {adminUser?.email}
+                  </p>
+                  <span className="inline-block mt-1 text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300">
+                    Super Admin
+                  </span>
+                </div>
+
+                <div className="p-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowProfileMenu(false);
+                      onSelectTab('settings');
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                  >
+                    <SettingsIcon className="w-4 h-4 text-slate-400" />
+                    Settings & Profile
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowProfileMenu(false);
+                      void signOut();
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-lg text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors cursor-pointer"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    Sign Out
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
