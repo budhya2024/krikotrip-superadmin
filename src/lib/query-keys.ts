@@ -1,0 +1,74 @@
+export const queryKeys = {
+  health: {
+    live: ['health', 'live'] as const,
+    ready: ['health', 'ready'] as const,
+  },
+  session: ['session'] as const,
+  dashboard: {
+    all: ['dashboard'] as const,
+    summary: (period?: string) => ['dashboard', 'summary', period] as const,
+    revenueSeries: (months?: number) => ['dashboard', 'revenue-series', months] as const,
+    destinationBookings: ['dashboard', 'destination-bookings'] as const,
+    leadRatio: (destinationId?: string) => ['dashboard', 'lead-ratio', destinationId] as const,
+  },
+  packages: {
+    all: ['packages'] as const,
+    list: (filters?: Record<string, unknown>) => ['packages', 'list', filters] as const,
+    detail: (idOrSlug: string) => ['packages', 'detail', idOrSlug] as const,
+  },
+  destinations: {
+    all: ['destinations'] as const,
+    list: (featured?: boolean) => ['destinations', 'list', featured] as const,
+  },
+  themes: {
+    all: ['themes'] as const,
+  },
+  enquiries: {
+    all: ['enquiries'] as const,
+    list: (filters?: Record<string, unknown>) => ['enquiries', 'list', filters] as const,
+    detail: (id: string) => ['enquiries', 'detail', id] as const,
+  },
+  vendors: {
+    all: ['vendors'] as const,
+    list: (filters?: Record<string, unknown>) => ['vendors', 'list', filters] as const,
+    detail: (id: string) => ['vendors', 'detail', id] as const,
+  },
+  reviews: {
+    all: ['reviews'] as const,
+    list: (filters?: Record<string, unknown>) => ['reviews', 'list', filters] as const,
+  },
+  blogs: {
+    all: ['blogs'] as const,
+    list: (filters?: Record<string, unknown>) => ['blogs', 'list', filters] as const,
+    detail: (slug: string) => ['blogs', 'detail', slug] as const,
+  },
+  gallery: {
+    all: ['gallery'] as const,
+    list: (category?: string) => ['gallery', 'list', category] as const,
+  },
+  offers: {
+    all: ['offers'] as const,
+  },
+  videos: {
+    all: ['videos'] as const,
+  },
+  faqs: {
+    all: ['faqs'] as const,
+    list: (scope?: string) => ['faqs', 'list', scope] as const,
+  },
+  coupons: {
+    all: ['coupons'] as const,
+  },
+  contacts: {
+    all: ['contacts'] as const,
+    list: (filters?: Record<string, unknown>) => ['contacts', 'list', filters] as const,
+  },
+  settings: ['settings'] as const,
+  notifications: {
+    all: ['notifications'] as const,
+    unreadCount: ['notifications', 'unread-count'] as const,
+  },
+  auditLogs: {
+    all: ['audit-logs'] as const,
+  },
+}

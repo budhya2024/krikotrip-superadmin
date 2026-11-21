@@ -1,12 +1,16 @@
-import { ThemeProvider } from './context/ThemeContext';
-import { AdminLayout } from './components/layout/AdminLayout';
+import { QueryClientProvider } from '@tanstack/react-query'
+import { ThemeProvider } from './context/ThemeContext'
+import { AdminLayout } from './components/layout/AdminLayout'
+import { queryClient } from './lib/query-client'
+import { ThemedToaster } from './components/common/ThemedToaster'
 
-function App() {
+export default function App() {
   return (
-    <ThemeProvider>
-      <AdminLayout />
-    </ThemeProvider>
-  );
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
+        <AdminLayout />
+        <ThemedToaster />
+      </ThemeProvider>
+    </QueryClientProvider>
+  )
 }
-
-export default App;
