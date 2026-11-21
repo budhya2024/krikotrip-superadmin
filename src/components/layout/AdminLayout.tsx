@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import type {
@@ -43,9 +44,42 @@ import { ChatbotView } from '../views/ChatbotView';
 import { SettingsView } from '../views/SettingsView';
 import { useTheme } from '../../context/ThemeContext';
 
+const validNavigationKeys: readonly NavigationKey[] = [
+  'dashboard',
+  'home-page',
+  'manage-tours',
+  'booking-enquiries',
+  'vendors',
+  'reviews',
+  'blog',
+  'gallery',
+  'contact',
+  'chatbot',
+  'settings',
+];
+
+const isValidNavigationKey = (key: unknown): key is NavigationKey => {
+  return typeof key === 'string' && (validNavigationKeys as readonly string[]).includes(key);
+};
+
 export const AdminLayout: React.FC = () => {
   const { theme } = useTheme();
-  const [currentTab, setCurrentTab] = useState<NavigationKey>('dashboard');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const currentTab: NavigationKey = isValidNavigationKey(tabParam) ? tabParam : 'dashboard';
+
+  const handleSelectTab = (tab: NavigationKey) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (tab === 'dashboard') {
+        next.delete('tab');
+      } else {
+        next.set('tab', tab);
+      }
+      return next;
+    });
+  };
+
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [isAddTourModalOpen, setIsAddTourModalOpen] = useState(false);
@@ -292,7 +326,7 @@ export const AdminLayout: React.FC = () => {
           <DashboardView
             tours={tours}
             enquiries={enquiries}
-            onNavigate={(tab) => setCurrentTab(tab)}
+            onNavigate={(tab) => handleSelectTab(tab)}
           />
         );
       case 'home-page':
@@ -417,7 +451,7 @@ export const AdminLayout: React.FC = () => {
       {/* Sidebar with 4px border radius and clean blue accents */}
       <Sidebar
         currentTab={currentTab}
-        onSelectTab={(tab) => setCurrentTab(tab)}
+        onSelectTab={handleSelectTab}
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
         mobileOpen={mobileSidebarOpen}
@@ -431,7 +465,7 @@ export const AdminLayout: React.FC = () => {
       >
         <Header
           currentTab={currentTab}
-          onSelectTab={(tab) => setCurrentTab(tab)}
+          onSelectTab={handleSelectTab}
           onOpenMobileSidebar={() => setMobileSidebarOpen(true)}
           isSidebarCollapsed={isSidebarCollapsed}
         />
