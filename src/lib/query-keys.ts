@@ -67,6 +67,11 @@ export const queryKeys = {
   contacts: {
     all: ['contacts'] as const,
     list: (filters?: Record<string, unknown>) => ['contacts', 'list', filters] as const,
+    detail: (id: string) => ['contacts', 'detail', id] as const,
+  },
+  newsletter: {
+    all: ['newsletter'] as const,
+    list: (filters?: Record<string, unknown>) => ['newsletter', 'list', filters] as const,
   },
   settings: ['settings'] as const,
   notifications: {

@@ -6,14 +6,12 @@ import type {
   NavigationKey,
   Tour,
   BookingEnquiry,
-  ContactMessage,
   Vendor,
   TourReview,
 } from '../../types';
 import {
   mockTours,
   mockEnquiries,
-  mockContacts,
   mockVendors,
   mockReviews,
 } from '../../data/mockData';
@@ -73,7 +71,6 @@ export const AdminLayout: React.FC = () => {
   const [tours, setTours] = useState<Tour[]>(mockTours);
   const [enquiries, setEnquiries] = useState<BookingEnquiry[]>(mockEnquiries);
   const [vendors, setVendors] = useState<Vendor[]>(mockVendors);
-  const [contacts, setContacts] = useState<ContactMessage[]>(mockContacts);
   const [reviews, setReviews] = useState<TourReview[]>(mockReviews);
 
   const handleAddTour = (newTour: Tour) => {
@@ -192,16 +189,6 @@ export const AdminLayout: React.FC = () => {
     setVendors(vendors.filter((v) => v.id !== id));
   };
 
-  const handleToggleContactReplied = (id: string) => {
-    setContacts(
-      contacts.map((c) => (c.id === id ? { ...c, status: c.status === 'Unread' ? 'Replied' : 'Unread' } : c))
-    );
-  };
-
-  const handleDeleteContact = (id: string) => {
-    setContacts(contacts.filter((c) => c.id !== id));
-  };
-
   const handleAddReview = (newReview: TourReview) => {
     setReviews([newReview, ...reviews]);
   };
@@ -305,13 +292,7 @@ export const AdminLayout: React.FC = () => {
       case 'gallery':
         return <GalleryView />;
       case 'contact':
-        return (
-          <ContactView
-            messages={contacts}
-            onToggleReplied={handleToggleContactReplied}
-            onDeleteMessage={handleDeleteContact}
-          />
-        );
+        return <ContactView />;
       case 'chatbot':
         return <ChatbotView />;
       case 'settings':

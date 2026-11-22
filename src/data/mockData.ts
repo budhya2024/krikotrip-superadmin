@@ -1,4 +1,4 @@
-import type { Tour, BookingEnquiry, BlogPost, GalleryItem, ContactMessage, Vendor, TourReview } from '../types';
+import type { Tour, BookingEnquiry, BlogPost, GalleryItem, Vendor, TourReview } from '../types';
 
 export const mockTours: Tour[] = [
   {
@@ -833,49 +833,6 @@ export const mockGallery: GalleryItem[] = [
     imageUrl: 'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&w=800&q=80',
     location: 'Kyoto, Japan',
     uploadDate: 'Oct 29, 2026',
-  },
-];
-
-export const mockContacts: ContactMessage[] = [
-  {
-    id: 'MSG-401',
-    senderName: 'Arthur Pendelton',
-    senderEmail: 'arthur.p@voyagergroup.com',
-    phone: '+1 415 555 0199',
-    subject: 'Corporate Annual Retreat for 45 Executives to Iceland',
-    message: 'Hello KrikoTrip team! We are looking to organize a high-end 5-day corporate team offsite in Iceland with helicopter glacier tour and private geothermal lagoon experience. Could you provide a customized itinerary proposal?',
-    status: 'Unread',
-    receivedAt: '25 mins ago',
-  },
-  {
-    id: 'MSG-402',
-    senderName: 'Claire Dubois',
-    senderEmail: 'claire.dubois@paristours.fr',
-    phone: '+33 1 42 68 55 00',
-    subject: 'B2B Luxury Destination Partnership Inquiry',
-    message: 'We are a boutique travel consultancy in Paris and would love to partner with KrikoTrip for Southeast Asia and Middle East ground handling.',
-    status: 'Unread',
-    receivedAt: '3 hours ago',
-  },
-  {
-    id: 'MSG-403',
-    senderName: 'Jonathan Reed',
-    senderEmail: 'j.reed@summitlaw.co.uk',
-    phone: '+44 20 8123 4567',
-    subject: 'Question regarding travel insurance coverage on Swiss tour',
-    message: 'I am planning to book the Glacier Express package for my parents (ages 68 & 70). Does your luxury package include comprehensive alpine evacuation and senior medical coverage?',
-    status: 'Replied',
-    receivedAt: '1 day ago',
-  },
-  {
-    id: 'MSG-404',
-    senderName: 'Nadia Belkacem',
-    senderEmail: 'nadia.b@horizon.ae',
-    phone: '+971 4 321 9876',
-    subject: 'Custom Yacht Charter booking for next month',
-    message: 'Looking for a private 70ft yacht for 8 guests around Dubai Marina and Palm Jumeirah with chef on board.',
-    status: 'Replied',
-    receivedAt: '2 days ago',
   },
 ];
 
