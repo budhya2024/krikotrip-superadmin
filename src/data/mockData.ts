@@ -1,4 +1,4 @@
-import type { Tour, BookingEnquiry, BlogPost, GalleryItem, ContactMessage, AgencySettings, Vendor, TourReview, DiscountOffer, TrendingVideo, TravelTheme, HomePageFaq } from '../types';
+import type { Tour, BookingEnquiry, BlogPost, GalleryItem, ContactMessage, AgencySettings, Vendor, TourReview, DiscountOffer, TrendingVideo, HomePageFaq } from '../types';
 
 export const mockTours: Tour[] = [
   {
@@ -1400,57 +1400,6 @@ export const mockTrendingVideos: TrendingVideo[] = [
     viewsCount: '62K views',
     isActive: true,
     order: 5,
-  },
-];
-
-export const mockTravelThemes: TravelTheme[] = [
-  {
-    id: 'thm-1',
-    name: 'Honeymoon & Romantic Getaways',
-    photoUrl: 'https://images.unsplash.com/photo-1510414842594-a61c69b5ae57?auto=format&fit=crop&w=600&q=80',
-    linkUrl: '/packages?theme=honeymoon',
-    tourCount: 14,
-    isActive: true,
-  },
-  {
-    id: 'thm-2',
-    name: 'Mountain Adventure & Treks',
-    photoUrl: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=600&q=80',
-    linkUrl: '/packages?theme=adventure',
-    tourCount: 18,
-    isActive: true,
-  },
-  {
-    id: 'thm-3',
-    name: 'Beach & Coastal Island Paradise',
-    photoUrl: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=600&q=80',
-    linkUrl: '/packages?theme=beach',
-    tourCount: 16,
-    isActive: true,
-  },
-  {
-    id: 'thm-4',
-    name: 'Luxury Heritage Resorts & Palaces',
-    photoUrl: 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=600&q=80',
-    linkUrl: '/packages?theme=luxury',
-    tourCount: 9,
-    isActive: true,
-  },
-  {
-    id: 'thm-5',
-    name: 'Wildlife & Nature Jungle Safaris',
-    photoUrl: 'https://images.unsplash.com/photo-1566438480900-0609be27a4be?auto=format&fit=crop&w=600&q=80',
-    linkUrl: '/packages?theme=wildlife',
-    tourCount: 11,
-    isActive: true,
-  },
-  {
-    id: 'thm-6',
-    name: 'Family & Group Holiday Packages',
-    photoUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=600&q=80',
-    linkUrl: '/packages?theme=family',
-    tourCount: 22,
-    isActive: true,
   },
 ];
 

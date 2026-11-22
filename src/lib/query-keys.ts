@@ -19,9 +19,11 @@ export const queryKeys = {
   destinations: {
     all: ['destinations'] as const,
     list: (featured?: boolean) => ['destinations', 'list', featured] as const,
+    admin: (search?: string, isActive?: boolean) => ['destinations', 'admin', search, isActive] as const,
   },
   themes: {
     all: ['themes'] as const,
+    admin: () => ['themes', 'admin'] as const,
   },
   enquiries: {
     all: ['enquiries'] as const,

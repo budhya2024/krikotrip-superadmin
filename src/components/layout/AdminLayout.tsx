@@ -14,7 +14,6 @@ import type {
   TourReview,
   DiscountOffer,
   TrendingVideo,
-  TravelTheme,
   HomePageFaq,
 } from '../../types';
 import {
@@ -28,7 +27,6 @@ import {
   mockReviews,
   mockDiscountOffers,
   mockTrendingVideos,
-  mockTravelThemes,
   mockHomePageFaqs,
 } from '../../data/mockData';
 import { DashboardView } from '../views/DashboardView';
@@ -95,7 +93,6 @@ export const AdminLayout: React.FC = () => {
   const [reviews, setReviews] = useState<TourReview[]>(mockReviews);
   const [discountOffers, setDiscountOffers] = useState<DiscountOffer[]>(mockDiscountOffers);
   const [trendingVideos, setTrendingVideos] = useState<TrendingVideo[]>(mockTrendingVideos);
-  const [travelThemes, setTravelThemes] = useState<TravelTheme[]>(mockTravelThemes);
   const [homePageFaqs, setHomePageFaqs] = useState<HomePageFaq[]>(mockHomePageFaqs);
 
   // Home Page Handlers
@@ -108,11 +105,6 @@ export const AdminLayout: React.FC = () => {
   const handleUpdateVideo = (video: TrendingVideo) => setTrendingVideos(trendingVideos.map((v) => (v.id === video.id ? video : v)));
   const handleDeleteVideo = (id: string) => setTrendingVideos(trendingVideos.filter((v) => v.id !== id));
   const handleToggleVideoStatus = (id: string) => setTrendingVideos(trendingVideos.map((v) => (v.id === id ? { ...v, isActive: !v.isActive } : v)));
-
-  const handleAddTheme = (thm: TravelTheme) => setTravelThemes([thm, ...travelThemes]);
-  const handleUpdateTheme = (thm: TravelTheme) => setTravelThemes(travelThemes.map((t) => (t.id === thm.id ? thm : t)));
-  const handleDeleteTheme = (id: string) => setTravelThemes(travelThemes.filter((t) => t.id !== id));
-  const handleToggleThemeStatus = (id: string) => setTravelThemes(travelThemes.map((t) => (t.id === id ? { ...t, isActive: !t.isActive } : t)));
 
   const handleAddFaq = (faq: HomePageFaq) => setHomePageFaqs([faq, ...homePageFaqs]);
   const handleUpdateFaq = (faq: HomePageFaq) => setHomePageFaqs(homePageFaqs.map((f) => (f.id === faq.id ? faq : f)));
@@ -342,11 +334,6 @@ export const AdminLayout: React.FC = () => {
             onUpdateVideo={handleUpdateVideo}
             onDeleteVideo={handleDeleteVideo}
             onToggleVideoStatus={handleToggleVideoStatus}
-            travelThemes={travelThemes}
-            onAddTheme={handleAddTheme}
-            onUpdateTheme={handleUpdateTheme}
-            onDeleteTheme={handleDeleteTheme}
-            onToggleThemeStatus={handleToggleThemeStatus}
             homePageFaqs={homePageFaqs}
             onAddFaq={handleAddFaq}
             onUpdateFaq={handleUpdateFaq}
