@@ -15,22 +15,19 @@ import {
 import type { NavigationKey } from '../../types';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../auth/use-auth';
+import {
+  useAdminNotificationsQuery,
+  useAdminNotificationUnreadCountQuery,
+  useMarkNotificationReadMutation,
+  useMarkAllNotificationsReadMutation,
+  type AdminNotificationItem,
+} from '../../api/notifications';
 
 interface HeaderProps {
   currentTab: NavigationKey;
   onSelectTab: (tab: NavigationKey) => void;
   onOpenMobileSidebar: () => void;
   isSidebarCollapsed: boolean;
-}
-
-interface NotificationItem {
-  id: string;
-  title: string;
-  description: string;
-  time: string;
-  type: 'booking' | 'review' | 'vendor' | 'contact';
-  read: boolean;
-  tab: NavigationKey;
 }
 
 const tabTitles: Record<NavigationKey, string> = {
@@ -61,44 +58,17 @@ const mobileTabTitles: Record<NavigationKey, string> = {
   settings: 'Settings',
 };
 
-const initialNotifications: NotificationItem[] = [
-  {
-    id: '1',
-    title: 'New Booking Enquiry',
-    description: 'Kritika Agarwal submitted enquiry for Tiger Trail package',
-    time: '5m ago',
-    type: 'booking',
-    read: false,
-    tab: 'booking-enquiries',
-  },
-  {
-    id: '2',
-    title: 'New Customer Review',
-    description: 'Aarav Sharma rated 5 stars for Kerala Houseboat Tour',
-    time: '25m ago',
-    type: 'review',
-    read: false,
-    tab: 'reviews',
-  },
-  {
-    id: '3',
-    title: 'Vendor Partner Update',
-    description: 'Kashmir Alpine & Shikara updated portal details',
-    time: '2h ago',
-    type: 'vendor',
-    read: false,
-    tab: 'vendors',
-  },
-  {
-    id: '4',
-    title: 'New Contact Message',
-    description: 'Vikram Singh sent enquiry regarding group custom tour',
-    time: '1d ago',
-    type: 'contact',
-    read: true,
-    tab: 'contact',
-  },
-];
+const formatTimeAgo = (dateStr: string): string => {
+  const diffMs = Date.now() - new Date(dateStr).getTime();
+  const diffSec = Math.floor(diffMs / 1000);
+  if (diffSec < 60) return 'Just now';
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHours = Math.floor(diffMin / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  const diffDays = Math.floor(diffHours / 24);
+  return `${diffDays}d ago`;
+};
 
 export const Header: React.FC<HeaderProps> = ({
   currentTab,
@@ -109,11 +79,16 @@ export const Header: React.FC<HeaderProps> = ({
   const { adminUser, signOut } = useAuth();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
-  const [notifications, setNotifications] = useState<NotificationItem[]>(initialNotifications);
   const notificationRef = useRef<HTMLDivElement>(null);
   const profileMenuRef = useRef<HTMLDivElement>(null);
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  const { data: unreadCountData } = useAdminNotificationUnreadCountQuery();
+  const { data: notificationsData } = useAdminNotificationsQuery({ limit: 20 });
+  const markReadMutation = useMarkNotificationReadMutation();
+  const markAllReadMutation = useMarkAllNotificationsReadMutation();
+
+  const unreadCount = unreadCountData ?? 0;
+  const notifications = notificationsData?.data ?? [];
   const currentTitle = tabTitles[currentTab] || 'Admin';
 
   useEffect(() => {
@@ -139,19 +114,21 @@ export const Header: React.FC<HeaderProps> = ({
     };
   }, [showNotifications, showProfileMenu]);
 
-  const handleMarkAllAsRead = () => {
-    setNotifications((prev) => prev.map((item) => ({ ...item, read: true })));
+  const handleMarkAllAsRead = async () => {
+    await markAllReadMutation.mutateAsync();
   };
 
-  const handleNotificationClick = (item: NotificationItem) => {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === item.id ? { ...n, read: true } : n))
-    );
+  const handleNotificationClick = async (item: AdminNotificationItem) => {
+    if (!item.readAt) {
+      await markReadMutation.mutateAsync(item.id);
+    }
     setShowNotifications(false);
-    onSelectTab(item.tab);
+    if (item.targetTab) {
+      onSelectTab(item.targetTab as NavigationKey);
+    }
   };
 
-  const getNotificationIcon = (type: NotificationItem['type']) => {
+  const getNotificationIcon = (type: AdminNotificationItem['type']) => {
     switch (type) {
       case 'booking':
         return <Calendar className="w-4 h-4 text-blue-600 dark:text-blue-400" />;
@@ -252,7 +229,7 @@ export const Header: React.FC<HeaderProps> = ({
                       <div
                         key={item.id}
                         onClick={() => handleNotificationClick(item)}
-                        className={`p-3.5 flex items-start gap-3 cursor-pointer transition-colors ${!item.read
+                        className={`p-3.5 flex items-start gap-3 cursor-pointer transition-colors ${!item.readAt
                           ? theme === 'dark'
                             ? 'bg-slate-800/40 hover:bg-slate-800/70'
                             : 'bg-blue-50/40 hover:bg-blue-50/70'
@@ -269,13 +246,13 @@ export const Header: React.FC<HeaderProps> = ({
                             <p className="text-xs font-semibold text-slate-900 dark:text-white truncate">
                               {item.title}
                             </p>
-                            <span className="text-[10px] text-slate-400 shrink-0">{item.time}</span>
+                            <span className="text-[10px] text-slate-400 shrink-0">{formatTimeAgo(item.createdAt)}</span>
                           </div>
                           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2">
-                            {item.description}
+                            {item.body}
                           </p>
                         </div>
-                        {!item.read && (
+                        {!item.readAt && (
                           <div className="w-2 h-2 rounded-full bg-blue-600 shrink-0 self-center" />
                         )}
                       </div>
