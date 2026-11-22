@@ -77,6 +77,11 @@ export const queryKeys = {
     all: ['newsletter'] as const,
     list: (filters?: Record<string, unknown>) => ['newsletter', 'list', filters] as const,
   },
+  customers: {
+    all: ['customers'] as const,
+    list: (filters?: Record<string, unknown>) => ['customers', 'list', filters] as const,
+    detail: (id: string) => ['customers', 'detail', id] as const,
+  },
   settings: ['settings'] as const,
   notifications: {
     all: ['notifications'] as const,

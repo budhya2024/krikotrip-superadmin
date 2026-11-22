@@ -20,6 +20,8 @@ import {
   Bell,
   Share2,
   BarChart3,
+  Award,
+  Mail,
 } from 'lucide-react';
 import type { AgencySettings } from '../../types';
 import { useTheme } from '../../context/ThemeContext';
@@ -30,6 +32,8 @@ import { uploadAdminImage } from '../../api/media';
 import {
   useAdminSettingsQuery,
   useUpdateAdminSettingsMutation,
+  type LoyaltyConfig,
+  type LoyaltyTierConfig,
 } from '../../api/settings';
 import brandLogo from '../../assets/images/brand-logo.png';
 
@@ -38,7 +42,7 @@ interface SettingsViewProps {
   onSaveSettings?: (settings: AgencySettings) => void;
 }
 
-type SettingsTab = 'profile-security' | 'appearance' | 'agency';
+type SettingsTab = 'profile-security' | 'appearance' | 'agency' | 'loyalty';
 
 export const SettingsView: React.FC<SettingsViewProps> = ({
   settings: initialSettings,
@@ -80,6 +84,20 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     ],
   }));
 
+  const [loyaltyConfig, setLoyaltyConfig] = useState<LoyaltyConfig>({
+    pointValuePaise: 100,
+    earnPercent: 1,
+    redeemMaxPercentOfOrder: 100,
+    tiers: [
+      { tier: 'silver_explorer', minLifetimePoints: 0 },
+      { tier: 'gold_explorer', minLifetimePoints: 1000 },
+      { tier: 'platinum_elite', minLifetimePoints: 5000 },
+    ],
+    signupBonusPoints: 0,
+  });
+  const [loyaltySavedSuccess, setLoyaltySavedSuccess] = useState(false);
+  const [loyaltyError, setLoyaltyError] = useState('');
+
   const [prevServerSettings, setPrevServerSettings] = useState(serverSettings);
   if (serverSettings !== prevServerSettings) {
     setPrevServerSettings(serverSettings);
@@ -100,6 +118,25 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         socialLinks: serverSettings.socialLinks || {},
         homeStats: serverSettings.homeStats || [],
       });
+      if (serverSettings.loyaltyConfig) {
+        const raw = serverSettings.loyaltyConfig as unknown as Partial<LoyaltyConfig>;
+        setLoyaltyConfig({
+          pointValuePaise: typeof raw.pointValuePaise === 'number' ? raw.pointValuePaise : 100,
+          earnPercent: typeof raw.earnPercent === 'number' ? raw.earnPercent : 1,
+          redeemMaxPercentOfOrder:
+            typeof raw.redeemMaxPercentOfOrder === 'number' ? raw.redeemMaxPercentOfOrder : 100,
+          tiers:
+            Array.isArray(raw.tiers) && raw.tiers.length > 0
+              ? (raw.tiers as LoyaltyTierConfig[])
+              : [
+                  { tier: 'silver_explorer', minLifetimePoints: 0 },
+                  { tier: 'gold_explorer', minLifetimePoints: 1000 },
+                  { tier: 'platinum_elite', minLifetimePoints: 5000 },
+                ],
+          signupBonusPoints:
+            typeof raw.signupBonusPoints === 'number' ? raw.signupBonusPoints : 0,
+        });
+      }
     }
   }
 
@@ -114,6 +151,11 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [profileError, setProfileError] = useState('');
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
+
+  const [newAdminEmail, setNewAdminEmail] = useState('');
+  const [isChangingEmail, setIsChangingEmail] = useState(false);
+  const [emailChangeSuccess, setEmailChangeSuccess] = useState('');
+  const [emailChangeError, setEmailChangeError] = useState('');
 
   const handleAvatarFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -238,6 +280,60 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     }
   };
 
+  const handleEmailChangeSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setEmailChangeError('');
+    setEmailChangeSuccess('');
+
+    const targetEmail = newAdminEmail.trim().toLowerCase();
+    if (!targetEmail || !targetEmail.includes('@')) {
+      setEmailChangeError('Please enter a valid email address.');
+      return;
+    }
+
+    if (targetEmail === adminEmail.toLowerCase()) {
+      setEmailChangeError('New email cannot be the same as your current email.');
+      return;
+    }
+
+    setIsChangingEmail(true);
+    try {
+      const res = await authClient.changeEmail({
+        newEmail: targetEmail,
+        callbackURL: window.location.origin + '/admin',
+      });
+
+      if (res?.error) {
+        setEmailChangeError(res.error.message || 'Failed to request email change.');
+        return;
+      }
+
+      setEmailChangeSuccess(
+        `Verification email sent to ${targetEmail}. Please check your inbox to confirm the change.`,
+      );
+      setNewAdminEmail('');
+    } catch {
+      setEmailChangeError('Unable to send email change verification. Please try again.');
+    } finally {
+      setIsChangingEmail(false);
+    }
+  };
+
+  const handleLoyaltySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoyaltyError('');
+    setLoyaltySavedSuccess(false);
+    try {
+      await updateSettingsMutation.mutateAsync({
+        loyaltyConfig,
+      });
+      setLoyaltySavedSuccess(true);
+      setTimeout(() => setLoyaltySavedSuccess(false), 3000);
+    } catch {
+      setLoyaltyError('Failed to save loyalty settings. Please try again.');
+    }
+  };
+
   const handleAgencySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAgencyError('');
@@ -340,6 +436,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           >
             <Building className="w-3.5 h-3.5" />
             <span>Agency & Currency</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('loyalty')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[4px] text-xs font-semibold transition-all cursor-pointer ${activeTab === 'loyalty'
+              ? 'bg-blue-600 text-white shadow-xs'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+          >
+            <Award className="w-3.5 h-3.5" />
+            <span>Loyalty & Tiers</span>
           </button>
         </div>
       </div>
@@ -625,6 +733,78 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 >
                   <KeyRound className="w-4 h-4" />
                   <span>Update Password</span>
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <div
+            className={`p-5 rounded-[4px] border space-y-5 ${theme === 'dark'
+              ? 'bg-slate-900 border-slate-800 text-white'
+              : 'bg-white border-slate-200 text-slate-900'
+              }`}
+          >
+            <div className="flex items-center justify-between pb-3.5 border-b border-slate-200 dark:border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <Mail className="w-5 h-5 text-blue-600" />
+                <div>
+                  <h3 className="font-semibold text-base">Change Admin Email</h3>
+                  <p className="text-xs text-slate-500">
+                    Update your primary super admin login address via email verification
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {emailChangeError && (
+              <div className="p-3.5 rounded-[4px] bg-rose-50 dark:bg-rose-950/70 text-rose-800 dark:text-rose-200 border border-rose-200 dark:border-rose-800 flex items-center gap-2.5 text-xs font-semibold">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>{emailChangeError}</span>
+              </div>
+            )}
+
+            {emailChangeSuccess && (
+              <div className="p-3.5 rounded-[4px] bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-800 flex items-center gap-2.5 text-xs font-semibold">
+                <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{emailChangeSuccess}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleEmailChangeSubmit} className="space-y-4">
+              <div>
+                <label className="block font-semibold mb-1 text-slate-700 dark:text-slate-300 text-xs">
+                  New Admin Email Address *
+                </label>
+                <div className="max-w-md">
+                  <input
+                    type="email"
+                    required
+                    placeholder="new-admin@krikotrips.com"
+                    value={newAdminEmail}
+                    onChange={(e) => setNewAdminEmail(e.target.value)}
+                    className={`w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none ${theme === 'dark'
+                      ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500'
+                      : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-blue-600'
+                      }`}
+                  />
+                  <p className="text-3xs text-slate-400 mt-1">
+                    A confirmation link will be delivered to the new email address before the update takes effect.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex justify-start pt-1">
+                <button
+                  type="submit"
+                  disabled={isChangingEmail || !newAdminEmail}
+                  className="flex items-center gap-2 px-5 py-2 rounded-[4px] text-xs sm:text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors cursor-pointer shadow-xs disabled:opacity-50"
+                >
+                  {isChangingEmail ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Mail className="w-4 h-4" />
+                  )}
+                  <span>{isChangingEmail ? 'Sending Link...' : 'Send Verification Email'}</span>
                 </button>
               </div>
             </form>
@@ -1163,6 +1343,295 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     <Save className="w-4 h-4" />
                   )}
                   <span>{updateSettingsMutation.isPending ? 'Saving...' : 'Save Agency Settings'}</span>
+                </button>
+              </div>
+            </>
+          )}
+        </form>
+      )}
+
+      {activeTab === 'loyalty' && (
+        <form onSubmit={handleLoyaltySubmit} className="space-y-6">
+          {loyaltyError && (
+            <div className="p-3.5 rounded-[4px] bg-rose-50 dark:bg-rose-950/70 text-rose-800 dark:text-rose-200 border border-rose-200 dark:border-rose-800 flex items-center gap-2.5 text-xs font-semibold">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>{loyaltyError}</span>
+            </div>
+          )}
+
+          {loyaltySavedSuccess && (
+            <div className="p-3.5 rounded-[4px] bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-800 flex items-center gap-2.5 text-xs font-semibold">
+              <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>Loyalty program rules, earn rates, and membership tiers updated successfully!</span>
+            </div>
+          )}
+
+          {isSettingsLoading ? (
+            <div className="flex items-center justify-center p-12">
+              <Loader2 className="w-7 h-7 text-blue-600 animate-spin" />
+            </div>
+          ) : (
+            <>
+              <div
+                className={`p-5 rounded-[4px] border space-y-4 ${theme === 'dark'
+                  ? 'bg-slate-900 border-slate-800 text-white'
+                  : 'bg-white border-slate-200 text-slate-900'
+                  }`}
+              >
+                <div className="flex items-center gap-2.5 pb-3.5 border-b border-slate-200 dark:border-slate-800">
+                  <Award className="w-5 h-5 text-blue-600" />
+                  <div>
+                    <h3 className="font-semibold text-base">Point Valuation & Earning Rules</h3>
+                    <p className="text-xs text-slate-500">
+                      Configure point redemption monetary value and automated earnings for completed trips
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+                  <div>
+                    <label className="block font-semibold mb-1 text-slate-700 dark:text-slate-300 text-xs">
+                      1 Point Value (₹) *
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      required
+                      value={loyaltyConfig.pointValuePaise / 100}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value) || 0;
+                        setLoyaltyConfig({
+                          ...loyaltyConfig,
+                          pointValuePaise: Math.max(1, Math.round(val * 100)),
+                        });
+                      }}
+                      className={`w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none ${theme === 'dark'
+                        ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500'
+                        : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-blue-600'
+                        }`}
+                    />
+                    <p className="text-3xs text-slate-400 mt-1">
+                      Monetary value in rupees per loyalty point ({loyaltyConfig.pointValuePaise} paise).
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold mb-1 text-slate-700 dark:text-slate-300 text-xs">
+                      Earn Rate (%) *
+                    </label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      max="100"
+                      required
+                      value={loyaltyConfig.earnPercent}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value) || 0;
+                        setLoyaltyConfig({
+                          ...loyaltyConfig,
+                          earnPercent: val,
+                        });
+                      }}
+                      className={`w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none ${theme === 'dark'
+                        ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500'
+                        : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-blue-600'
+                        }`}
+                    />
+                    <p className="text-3xs text-slate-400 mt-1">
+                      Percentage of completed booking final price credited as points.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold mb-1 text-slate-700 dark:text-slate-300 text-xs">
+                      Max Order Redemption (%) *
+                    </label>
+                    <input
+                      type="number"
+                      step="1"
+                      min="1"
+                      max="100"
+                      required
+                      value={loyaltyConfig.redeemMaxPercentOfOrder}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10) || 100;
+                        setLoyaltyConfig({
+                          ...loyaltyConfig,
+                          redeemMaxPercentOfOrder: Math.min(100, Math.max(1, val)),
+                        });
+                      }}
+                      className={`w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none ${theme === 'dark'
+                        ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500'
+                        : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-blue-600'
+                        }`}
+                    />
+                    <p className="text-3xs text-slate-400 mt-1">
+                      Maximum percentage of an order price that can be paid via points.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <label className="block font-semibold mb-1 text-slate-700 dark:text-slate-300 text-xs">
+                    Sign-up Bonus Points
+                  </label>
+                  <input
+                    type="number"
+                    step="1"
+                    min="0"
+                    value={loyaltyConfig.signupBonusPoints}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value, 10) || 0;
+                      setLoyaltyConfig({
+                        ...loyaltyConfig,
+                        signupBonusPoints: Math.max(0, val),
+                      });
+                    }}
+                    className={`w-full max-w-xs p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none ${theme === 'dark'
+                      ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500'
+                      : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-blue-600'
+                      }`}
+                  />
+                  <p className="text-3xs text-slate-400 mt-1">
+                    Bonus points credited automatically when a new customer verifies their account.
+                  </p>
+                </div>
+              </div>
+
+              <div
+                className={`p-5 rounded-[4px] border space-y-4 ${theme === 'dark'
+                  ? 'bg-slate-900 border-slate-800 text-white'
+                  : 'bg-white border-slate-200 text-slate-900'
+                  }`}
+              >
+                <div className="flex items-center gap-2.5 pb-3.5 border-b border-slate-200 dark:border-slate-800">
+                  <Shield className="w-5 h-5 text-blue-600" />
+                  <div>
+                    <h3 className="font-semibold text-base">Membership Tier Thresholds</h3>
+                    <p className="text-xs text-slate-500">
+                      Minimum lifetime points required to attain Silver, Gold, and Platinum status
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="p-4 rounded-[4px] border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase">
+                        Silver Explorer
+                      </span>
+                      <span className="px-2 py-0.5 text-3xs font-bold uppercase rounded-[4px] bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300">
+                        Default
+                      </span>
+                    </div>
+                    <div>
+                      <label className="block text-2xs font-semibold mb-1 text-slate-500">
+                        Minimum Lifetime Points
+                      </label>
+                      <input
+                        type="number"
+                        disabled
+                        value={
+                          loyaltyConfig.tiers.find((t) => t.tier === 'silver_explorer')?.minLifetimePoints ?? 0
+                        }
+                        className="w-full p-2 text-xs rounded-[4px] border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800/60 text-slate-400 cursor-not-allowed"
+                      />
+                    </div>
+                    <p className="text-3xs text-slate-400">Entry-level tier assigned upon customer account creation.</p>
+                  </div>
+
+                  <div className="p-4 rounded-[4px] border border-amber-200 dark:border-amber-900/60 bg-amber-50/40 dark:bg-amber-950/20 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-amber-700 dark:text-amber-400 uppercase">
+                        Gold Explorer
+                      </span>
+                      <span className="px-2 py-0.5 text-3xs font-bold uppercase rounded-[4px] bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300">
+                        Tier 2
+                      </span>
+                    </div>
+                    <div>
+                      <label className="block text-2xs font-semibold mb-1 text-slate-600 dark:text-slate-400">
+                        Minimum Lifetime Points
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        required
+                        value={
+                          loyaltyConfig.tiers.find((t) => t.tier === 'gold_explorer')?.minLifetimePoints ?? 1000
+                        }
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value, 10) || 0;
+                          setLoyaltyConfig({
+                            ...loyaltyConfig,
+                            tiers: loyaltyConfig.tiers.map((t) =>
+                              t.tier === 'gold_explorer' ? { ...t, minLifetimePoints: val } : t,
+                            ),
+                          });
+                        }}
+                        className={`w-full p-2 text-xs rounded-[4px] border outline-none ${theme === 'dark'
+                          ? 'bg-slate-800 border-slate-700 text-white focus:border-amber-500'
+                          : 'bg-white border-amber-200 text-slate-900 focus:border-amber-600'
+                          }`}
+                      />
+                    </div>
+                    <p className="text-3xs text-slate-400">Unlocked after accumulating threshold lifetime points.</p>
+                  </div>
+
+                  <div className="p-4 rounded-[4px] border border-blue-200 dark:border-blue-900/60 bg-blue-50/40 dark:bg-blue-950/20 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-blue-700 dark:text-blue-400 uppercase">
+                        Platinum Elite
+                      </span>
+                      <span className="px-2 py-0.5 text-3xs font-bold uppercase rounded-[4px] bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-300">
+                        Top Tier
+                      </span>
+                    </div>
+                    <div>
+                      <label className="block text-2xs font-semibold mb-1 text-slate-600 dark:text-slate-400">
+                        Minimum Lifetime Points
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        required
+                        value={
+                          loyaltyConfig.tiers.find((t) => t.tier === 'platinum_elite')?.minLifetimePoints ?? 5000
+                        }
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value, 10) || 0;
+                          setLoyaltyConfig({
+                            ...loyaltyConfig,
+                            tiers: loyaltyConfig.tiers.map((t) =>
+                              t.tier === 'platinum_elite' ? { ...t, minLifetimePoints: val } : t,
+                            ),
+                          });
+                        }}
+                        className={`w-full p-2 text-xs rounded-[4px] border outline-none ${theme === 'dark'
+                          ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500'
+                          : 'bg-white border-blue-200 text-slate-900 focus:border-blue-600'
+                          }`}
+                      />
+                    </div>
+                    <p className="text-3xs text-slate-400">Premium recognition for top-spending frequent travelers.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  type="submit"
+                  disabled={updateSettingsMutation.isPending}
+                  className="flex items-center gap-2 px-6 py-2.5 rounded-[4px] text-xs sm:text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors cursor-pointer shadow-xs disabled:opacity-50"
+                >
+                  {updateSettingsMutation.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Save className="w-4 h-4" />
+                  )}
+                  <span>{updateSettingsMutation.isPending ? 'Saving...' : 'Save Loyalty Settings'}</span>
                 </button>
               </div>
             </>

@@ -60,6 +60,13 @@ export interface NeonAuthClient {
     data?: unknown
     error?: { message?: string } | null
   }>
+  changeEmail: (params: {
+    newEmail: string
+    callbackURL?: string
+  }) => Promise<{
+    data?: unknown
+    error?: { message?: string } | null
+  }>
   changePassword: (params: {
     currentPassword: string
     newPassword: string

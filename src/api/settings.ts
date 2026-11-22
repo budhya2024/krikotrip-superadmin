@@ -10,6 +10,19 @@ export interface HomeStatItem {
   icon?: string
 }
 
+export interface LoyaltyTierConfig {
+  tier: 'silver_explorer' | 'gold_explorer' | 'platinum_elite'
+  minLifetimePoints: number
+}
+
+export interface LoyaltyConfig {
+  pointValuePaise: number
+  earnPercent: number
+  redeemMaxPercentOfOrder: number
+  tiers: LoyaltyTierConfig[]
+  signupBonusPoints: number
+}
+
 export interface AdminSettings {
   id: number
   superAdminUserId: string | null
@@ -27,7 +40,7 @@ export interface AdminSettings {
   smsAlerts: boolean
   socialLinks: Record<string, string>
   homeStats: HomeStatItem[]
-  loyaltyConfig: Record<string, unknown>
+  loyaltyConfig: LoyaltyConfig
   reviewConfig: {
     autoApproveVerified: boolean
   }
@@ -51,7 +64,7 @@ export interface UpdateAdminSettingsInput {
   smsAlerts?: boolean
   socialLinks?: Record<string, string>
   homeStats?: HomeStatItem[]
-  loyaltyConfig?: Record<string, unknown>
+  loyaltyConfig?: LoyaltyConfig | Record<string, unknown>
   reviewConfig?: {
     autoApproveVerified: boolean
   }
