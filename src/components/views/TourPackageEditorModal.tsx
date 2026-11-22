@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   MapPin,
@@ -19,16 +19,52 @@ import {
   Check,
   ArrowLeft,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import type { Tour, ItineraryDay, TourFaq } from '../../types';
 import { useTheme } from '../../context/ThemeContext';
-import { SUPPORTED_DESTINATIONS } from './VendorPortalView';
 import { ImageUploadField } from '../common/ImageUploadField';
+import { useDestinationsQuery } from '../../api/destinations';
+import { useThemesQuery } from '../../api/themes';
+import {
+  useAdminPackageQuery,
+  useCreatePackageMutation,
+  useUpdatePackageMutation,
+  type CreatePackageInput,
+  type TravelType,
+  type PackageCategory,
+  type PackageStatus,
+} from '../../api/packages';
+
+const toTravelType = (val: string): TravelType => {
+  const normalized = val.toLowerCase();
+  if (normalized === 'family' || normalized === 'honeymoon' || normalized === 'leisure' || normalized === 'adventure' || normalized === 'group') {
+    return normalized;
+  }
+  return 'couple';
+};
+
+const toPackageCategory = (val: string): PackageCategory => {
+  const normalized = val.toLowerCase();
+  if (normalized === 'adventure' || normalized === 'honeymoon' || normalized === 'family' || normalized === 'cultural') {
+    return normalized;
+  }
+  return 'luxury';
+};
+
+const toPackageStatus = (val: string): PackageStatus => {
+  const normalized = val.toLowerCase();
+  if (normalized === 'draft' || normalized === 'archived') {
+    return normalized;
+  }
+  return 'published';
+};
 
 interface TourPackageEditorModalProps {
   isOpen: boolean;
   onClose: () => void;
-  tour: Tour | null; // null means creating a new tour
-  onSave: (tour: Tour) => void;
+  tour: Tour | null;
+  packageId?: string | null;
+  onSave?: (tour: Tour) => void;
   initialTab?: 'basic' | 'about' | 'itinerary' | 'includes' | 'faqs';
 }
 
@@ -36,6 +72,7 @@ export const TourPackageEditorModal: React.FC<TourPackageEditorModalProps> = ({
   isOpen,
   onClose,
   tour,
+  packageId,
   onSave,
   initialTab = 'basic',
 }) => {
@@ -44,25 +81,43 @@ export const TourPackageEditorModal: React.FC<TourPackageEditorModalProps> = ({
     initialTab
   );
 
-  // Form State
+  const { data: destinationsData } = useDestinationsQuery();
+  const { data: themesData } = useThemesQuery();
+
+  const effectiveId = packageId || (tour && !tour.id.startsWith('TR-') ? tour.id : null);
+  const { data: packageDetail } = useAdminPackageQuery(effectiveId);
+
+  const createMutation = useCreatePackageMutation();
+  const updateMutation = useUpdatePackageMutation();
+
   const [title, setTitle] = useState(tour?.title || '');
-  const [destination, setDestination] = useState(tour?.destination || 'Kashmir');
+  const [slug, setSlug] = useState('');
+  const [subtitle, setSubtitle] = useState('');
+  const [destinationId, setDestinationId] = useState('');
+  const [destination, setDestination] = useState(tour?.destination || '');
+  const [locationLabel, setLocationLabel] = useState('');
   const [country, setCountry] = useState(tour?.country || 'India');
   const [category, setCategory] = useState<Tour['category']>(tour?.category || 'Luxury');
+  const [travelType, setTravelType] = useState<string>('couple');
   const [duration, setDuration] = useState(tour?.duration || '6 Days / 5 Nights');
-  const [price, setPrice] = useState<number>(tour?.price || 850);
+  const [price, setPrice] = useState<number>(tour?.price || 25000);
+  const [originalPrice, setOriginalPrice] = useState<number>(0);
   const [seatsAvailable, setSeatsAvailable] = useState<number>(tour?.seatsAvailable || 10);
   const [featuredImage, setFeaturedImage] = useState(
     tour?.featuredImage ||
-    'https://images.unsplash.com/photo-1595815771614-ade9d652a65d?auto=format&fit=crop&w=800&q=80'
+    'https://images.unsplash.com/photo-1544644181-1484b3fdfc62?auto=format&fit=crop&w=1200&q=80'
   );
   const [status, setStatus] = useState<Tour['status']>(tour?.status || 'Published');
+  const [isFeatured, setIsFeatured] = useState(false);
+  const [featuredRank, setFeaturedRank] = useState(1);
+  const [badgeLabel, setBadgeLabel] = useState('');
+  const [selectedThemeIds, setSelectedThemeIds] = useState<string[]>([]);
 
-  // About Tour & Highlights
   const [description, setDescription] = useState(
     tour?.description ||
-    'Experience the pinnacle of travel luxury and adventure. Tailored for discerning explorers, this comprehensive package features handpicked resorts, private chauffeured transfers, guided excursions, and authentic local cultural engagements.'
+    'Experience the pinnacle of travel luxury and adventure with KrikoTrip.'
   );
+  const [overview, setOverview] = useState('');
   const [highlights, setHighlights] = useState<string[]>(
     tour?.highlights || [
       'Private chauffeured airport transfers in premium climate-controlled vehicles',
@@ -73,34 +128,32 @@ export const TourPackageEditorModal: React.FC<TourPackageEditorModalProps> = ({
   );
   const [newHighlightInput, setNewHighlightInput] = useState('');
 
-  // Itinerary (Day-by-Day) matching the user reference screenshot
+  const [hotelName, setHotelName] = useState('');
+  const [hotelStars, setHotelStars] = useState(4);
+  const [hotelRoom, setHotelRoom] = useState('');
+  const [hotelAmenities, setHotelAmenities] = useState<string[]>([]);
+  const [newAmenityInput, setNewAmenityInput] = useState('');
+
+  const [groupSize, setGroupSize] = useState('2-12 travelers');
+  const [languages, setLanguages] = useState('English, Hindi');
+  const [bestSeason, setBestSeason] = useState('Oct - May');
+  const [startingPoint, setStartingPoint] = useState('');
+  const [endingPoint, setEndingPoint] = useState('');
+
+  const [seoTitle, setSeoTitle] = useState('');
+  const [metaDescription, setMetaDescription] = useState('');
+
   const [itinerary, setItinerary] = useState<ItineraryDay[]>(
     tour?.itinerary || [
       {
         dayNumber: 1,
-        title: 'Arrival Port Blair & Cellular Jail Memorial',
-        description: 'Transfer from airport to hotel. Visit Cellular Jail and attend the national Sound & Light program.',
-        transport: 'Car, Flight, Boat',
-        activities: 'Airport Pick-up, Cellular Jail',
+        title: 'Arrival & Welcome Reception',
+        description: 'Meet our tour chauffeur at airport, check into resort, and relax.',
+        transport: 'Private Luxury Vehicle',
+        activities: 'Airport Pick-up, Check-in, Sunset walk',
         meals: 'Dinner Included',
-        accommodation: 'Peerless Sarovar Portico, Port Blair',
+        accommodation: 'Premium Beach Resort',
         highlightPhotos: [
-          'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=400&q=80',
-          'https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=400&q=80',
-          'https://images.unsplash.com/photo-1510414842594-a61c69b5ae57?auto=format&fit=crop&w=400&q=80',
-          'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=400&q=80',
-        ],
-      },
-      {
-        dayNumber: 2,
-        title: 'Island Transfer & Sunset Beach Excursion',
-        description: 'Morning private ferry transfer to island resort. Leisure afternoon and evening sunset walk along the coastline.',
-        transport: 'High-speed Catamaran & Private AC Cab',
-        activities: 'Ferry cruise, Beach stroll, Sunset photography',
-        meals: 'Breakfast & Dinner',
-        accommodation: 'Seaside Luxury Palms Resort',
-        highlightPhotos: [
-          'https://images.unsplash.com/photo-1544551763-46a013bb70d5?auto=format&fit=crop&w=400&q=80',
           'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=400&q=80',
         ],
       },
@@ -109,13 +162,11 @@ export const TourPackageEditorModal: React.FC<TourPackageEditorModalProps> = ({
   const [expandedDays, setExpandedDays] = useState<Record<number, boolean>>({ 1: true });
   const [newPhotoUrl, setNewPhotoUrl] = useState<Record<number, string>>({});
 
-  // Inclusions & Exclusions
   const [inclusions, setInclusions] = useState<string[]>(
     tour?.inclusions || [
       'Luxury hotel & heritage resort accommodation on twin sharing basis',
       'Daily lavish buffet breakfast & chef-curated regional dinners',
       'Private dedicated air-conditioned tourist vehicle for transfers & sightseeing',
-      'Complimentary welcome drinks upon arrival at all participating resorts',
       'All toll taxes, parking charges, driver allowances & permit processing',
     ]
   );
@@ -123,14 +174,13 @@ export const TourPackageEditorModal: React.FC<TourPackageEditorModalProps> = ({
     tour?.exclusions || [
       'Domestic or international flights / train tickets to destination',
       'Personal expenses such as laundry, alcoholic beverages, and minibar usage',
-      'Optional adventure activities, water sports gear rentals, and video camera fees',
-      'Mandatory 5% GST and applicable TCS',
+      'Optional adventure activities and water sports gear rentals',
+      'Mandatory 5% GST surcharge at final check-out',
     ]
   );
   const [newInclusionInput, setNewInclusionInput] = useState('');
   const [newExclusionInput, setNewExclusionInput] = useState('');
 
-  // Tour FAQs
   const [faqs, setFaqs] = useState<TourFaq[]>(
     tour?.faqs || [
       {
@@ -143,28 +193,115 @@ export const TourPackageEditorModal: React.FC<TourPackageEditorModalProps> = ({
         question: 'Are all inner-line permits and entry passes included?',
         answer: 'Yes! All required tourist permits, environmental fees, and monument entry passes mentioned in the itinerary are fully pre-cleared by our ground team.',
       },
-      {
-        id: 'faq-3',
-        question: 'Can this package be customized for dietary requirements?',
-        answer: 'Absolutely. Please inform your travel coordinator after booking to arrange purely vegetarian, vegan, or Jain meals.',
-      },
     ]
   );
   const [newFaqQuestion, setNewFaqQuestion] = useState('');
   const [newFaqAnswer, setNewFaqAnswer] = useState('');
   const [expandedFaqs, setExpandedFaqs] = useState<Record<string, boolean>>({ 'faq-1': true });
 
-  // Tour reviews preserved on tour object (managed via Customer Reviews page)
-  const reviews = tour?.reviews || [];
+  useEffect(() => {
+    if (destinationsData && destinationsData.length > 0 && !destinationId) {
+      if (destination) {
+        const matching = destinationsData.find(
+          (d) => d.name.toLowerCase() === destination.toLowerCase() || d.slug.toLowerCase() === destination.toLowerCase()
+        );
+        if (matching) {
+          setDestinationId(matching.id);
+        } else {
+          setDestinationId(destinationsData[0]!.id);
+        }
+      } else {
+        setDestinationId(destinationsData[0]!.id);
+        setDestination(destinationsData[0]!.name);
+      }
+    }
+  }, [destinationsData, destination, destinationId]);
+
+  useEffect(() => {
+    if (packageDetail) {
+      setTitle(packageDetail.title);
+      setSlug(packageDetail.slug);
+      setSubtitle(packageDetail.subtitle || '');
+      setDestinationId(packageDetail.destination.id);
+      setDestination(packageDetail.destination.name);
+      setLocationLabel(packageDetail.locationLabel);
+      setCountry(packageDetail.country);
+      setCategory(
+        (packageDetail.category.charAt(0).toUpperCase() + packageDetail.category.slice(1)) as Tour['category']
+      );
+      setTravelType(packageDetail.travelType);
+      setDuration(`${packageDetail.days} Days / ${packageDetail.nights} Nights`);
+      setPrice(Math.round(packageDetail.pricePaise / 100));
+      setOriginalPrice(
+        packageDetail.originalPricePaise ? Math.round(packageDetail.originalPricePaise / 100) : 0
+      );
+      setSeatsAvailable(packageDetail.seatsAvailable ?? 10);
+      setFeaturedImage(packageDetail.coverImageUrl || '');
+      setStatus(
+        packageDetail.status === 'published'
+          ? 'Published'
+          : packageDetail.status === 'draft'
+          ? 'Draft'
+          : 'Archived'
+      );
+      setIsFeatured(packageDetail.isFeatured);
+      setFeaturedRank(packageDetail.featuredRank || 1);
+      setBadgeLabel(packageDetail.badgeLabel || '');
+      setSelectedThemeIds(packageDetail.themeIds || []);
+      setDescription(packageDetail.shortDescription);
+      setOverview(packageDetail.overview);
+      setHighlights(packageDetail.highlights || []);
+      setInclusions(packageDetail.inclusions || []);
+      setExclusions(packageDetail.exclusions || []);
+      if (packageDetail.hotel) {
+        setHotelName(packageDetail.hotel.name || '');
+        setHotelStars(packageDetail.hotel.stars || 4);
+        setHotelRoom(packageDetail.hotel.room || '');
+        setHotelAmenities(packageDetail.hotel.amenities || []);
+      }
+      if (packageDetail.tripFacts) {
+        setGroupSize(packageDetail.tripFacts.groupSize || '2-12 travelers');
+        setLanguages(packageDetail.tripFacts.languages || 'English, Hindi');
+        setBestSeason(packageDetail.tripFacts.bestSeason || 'Oct - May');
+        setStartingPoint(packageDetail.tripFacts.startingPoint || '');
+        setEndingPoint(packageDetail.tripFacts.endingPoint || '');
+      }
+      if (packageDetail.seo) {
+        setSeoTitle(packageDetail.seo.title || '');
+        setMetaDescription(packageDetail.seo.metaDescription || '');
+      }
+      if (packageDetail.itinerary && packageDetail.itinerary.length > 0) {
+        setItinerary(
+          packageDetail.itinerary.map((d) => ({
+            dayNumber: d.dayNumber,
+            title: d.title,
+            description: d.description,
+            transport: d.transport || '',
+            activities: Array.isArray(d.activities) ? d.activities.join(', ') : '',
+            meals: d.meals || '',
+            accommodation: d.stay || '',
+            highlightPhotos: (d.media || []).map((m) => m.url),
+          }))
+        );
+      }
+      if (packageDetail.faqs && packageDetail.faqs.length > 0) {
+        setFaqs(
+          packageDetail.faqs.map((f, i) => ({
+            id: f.id || `faq-${i}`,
+            question: f.question,
+            answer: f.answer,
+          }))
+        );
+      }
+    }
+  }, [packageDetail]);
 
   if (!isOpen) return null;
 
-  // Toggle Day Expand
   const toggleDayExpand = (dayNum: number) => {
     setExpandedDays((prev) => ({ ...prev, [dayNum]: !prev[dayNum] }));
   };
 
-  // Add Highlight
   const handleAddHighlight = () => {
     if (!newHighlightInput.trim()) return;
     setHighlights([...highlights, newHighlightInput.trim()]);
@@ -175,7 +312,16 @@ export const TourPackageEditorModal: React.FC<TourPackageEditorModalProps> = ({
     setHighlights(highlights.filter((_, i) => i !== idx));
   };
 
-  // Add Day Itinerary
+  const handleAddAmenity = () => {
+    if (!newAmenityInput.trim()) return;
+    setHotelAmenities([...hotelAmenities, newAmenityInput.trim()]);
+    setNewAmenityInput('');
+  };
+
+  const handleRemoveAmenity = (idx: number) => {
+    setHotelAmenities(hotelAmenities.filter((_, i) => i !== idx));
+  };
+
   const handleAddDay = () => {
     const nextDayNum = itinerary.length + 1;
     const newDay: ItineraryDay = {
@@ -202,7 +348,6 @@ export const TourPackageEditorModal: React.FC<TourPackageEditorModalProps> = ({
 
   const handleRemoveDay = (dayNum: number) => {
     const filtered = itinerary.filter((d) => d.dayNumber !== dayNum);
-    // Renumber days
     const renumbered = filtered.map((d, i) => ({ ...d, dayNumber: i + 1 }));
     setItinerary(renumbered);
   };
@@ -233,7 +378,6 @@ export const TourPackageEditorModal: React.FC<TourPackageEditorModalProps> = ({
     );
   };
 
-  // Inclusions & Exclusions
   const handleAddInclusion = () => {
     if (!newInclusionInput.trim()) return;
     setInclusions([...inclusions, newInclusionInput.trim()]);
@@ -254,7 +398,6 @@ export const TourPackageEditorModal: React.FC<TourPackageEditorModalProps> = ({
     setExclusions(exclusions.filter((_, i) => i !== idx));
   };
 
-  // FAQs
   const handleAddFaq = () => {
     if (!newFaqQuestion.trim() || !newFaqAnswer.trim()) return;
     const newFaq: TourFaq = {
@@ -272,38 +415,120 @@ export const TourPackageEditorModal: React.FC<TourPackageEditorModalProps> = ({
     setFaqs(faqs.filter((f) => f.id !== id));
   };
 
-  // Submit full tour package
-  const handleSaveAll = (e?: React.FormEvent) => {
+  const handleSaveAll = async (e?: React.FormEvent) => {
     if (e && e.preventDefault) e.preventDefault();
-    const updatedTour: Tour = {
-      id: tour?.id || `TR-${Date.now().toString().slice(-4)}`,
+
+    const selectedDest = destinationsData?.find((d) => d.id === destinationId) || destinationsData?.[0];
+    if (!selectedDest) {
+      toast.error('Please select a valid destination');
+      return;
+    }
+
+    const daysMatch = duration.match(/(\d+)\s*Days?/i);
+    const parsedDays = daysMatch ? parseInt(daysMatch[1]!, 10) : itinerary.length > 0 ? itinerary.length : 5;
+    const nightsMatch = duration.match(/(\d+)\s*Nights?/i);
+    const parsedNights = nightsMatch ? parseInt(nightsMatch[1]!, 10) : Math.max(0, parsedDays - 1);
+
+    const payload: CreatePackageInput = {
       title: title.trim() || 'New Tour Package',
-      destination,
-      country,
-      category,
-      duration,
-      price: Number(price),
-      seatsAvailable: Number(seatsAvailable),
-      featuredImage,
-      status,
-      rating: tour?.rating ?? (reviews.length > 0 ? Number((reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length).toFixed(2)) : 5.0),
-      reviewsCount: tour?.reviewsCount ?? reviews.length,
-      description,
-      highlights,
-      itinerary,
-      inclusions,
-      exclusions,
-      faqs,
-      reviews,
+      slug: slug.trim() || undefined,
+      subtitle: subtitle.trim() || undefined,
+      destinationId: selectedDest.id,
+      locationLabel: locationLabel.trim() || `${selectedDest.name}, ${country}`,
+      country: country.trim() || 'India',
+      days: parsedDays,
+      nights: parsedNights,
+      travelType: toTravelType(travelType),
+      category: toPackageCategory(category),
+      pricePaise: Math.round(Number(price) * 100),
+      originalPricePaise: originalPrice ? Math.round(Number(originalPrice) * 100) : null,
+      seatsAvailable: Number(seatsAvailable) || 10,
+      status: toPackageStatus(status),
+      isFeatured,
+      featuredRank: isFeatured ? Number(featuredRank) : null,
+      badgeLabel: badgeLabel.trim() || null,
+      shortDescription: description.trim() || title,
+      overview: overview.trim() || description.trim() || title,
+      highlights: highlights.filter(Boolean),
+      inclusions: inclusions.filter(Boolean),
+      exclusions: exclusions.filter(Boolean),
+      hotelName: hotelName.trim() || null,
+      hotelStars: Number(hotelStars) || 4,
+      hotelRoom: hotelRoom.trim() || null,
+      hotelAmenities: hotelAmenities.filter(Boolean),
+      tripFacts: {
+        groupSize,
+        languages,
+        bestSeason,
+        startingPoint,
+        endingPoint,
+      },
+      coverMediaId: null,
+      galleryMediaIds: [],
+      themeIds: selectedThemeIds,
+      itinerary: itinerary.map((d) => ({
+        dayNumber: d.dayNumber,
+        title: d.title,
+        description: d.description,
+        transport: d.transport || null,
+        meals: d.meals || null,
+        stay: d.accommodation || null,
+        activities: d.activities
+          ? d.activities.split(',').map((s) => s.trim()).filter(Boolean)
+          : [],
+      })),
+      faqs: faqs.map((f, idx) => ({
+        question: f.question,
+        answer: f.answer,
+        sortOrder: idx + 1,
+      })),
+      seoTitle: seoTitle.trim() || null,
+      metaDescription: metaDescription.trim() || null,
     };
 
-    onSave(updatedTour);
-    onClose();
+    try {
+      if (effectiveId) {
+        await updateMutation.mutateAsync({ id: effectiveId, input: payload });
+        toast.success('Tour package updated successfully');
+      } else {
+        await createMutation.mutateAsync(payload);
+        toast.success('Tour package created successfully');
+      }
+
+      if (onSave) {
+        onSave({
+          id: effectiveId || `TR-${Date.now().toString().slice(-4)}`,
+          title: title.trim(),
+          destination: selectedDest.name,
+          country,
+          duration: `${parsedDays} Days / ${parsedNights} Nights`,
+          price: Number(price),
+          rating: 5,
+          reviewsCount: 0,
+          featuredImage,
+          category,
+          status,
+          seatsAvailable: Number(seatsAvailable),
+          description,
+          highlights,
+          itinerary,
+          inclusions,
+          exclusions,
+          faqs,
+        });
+      }
+
+      onClose();
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to save package';
+      toast.error(msg);
+    }
   };
+
+  const isSaving = createMutation.isPending || updateMutation.isPending;
 
   return (
     <div className="space-y-4">
-      {/* Top Breadcrumb & Action Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-200 dark:border-slate-800">
         <div className="flex items-center gap-2 text-xs sm:text-sm flex-wrap">
           <button
@@ -316,12 +541,11 @@ export const TourPackageEditorModal: React.FC<TourPackageEditorModalProps> = ({
           </button>
           <span className="text-slate-400">/</span>
           <span className="font-semibold text-slate-800 dark:text-slate-200 truncate max-w-[320px]">
-            {tour ? tour.title : 'New Tour Package'}
+            {title || 'New Tour Package'}
           </span>
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Status selector */}
           <select
             value={status}
             onChange={(e) => setStatus(e.target.value as 'Published' | 'Draft')}
@@ -341,23 +565,22 @@ export const TourPackageEditorModal: React.FC<TourPackageEditorModalProps> = ({
 
           <button
             type="button"
+            disabled={isSaving}
             onClick={handleSaveAll}
-            className="px-5 py-1.5 text-xs font-semibold rounded-[4px] bg-blue-600 hover:bg-blue-700 text-white shadow-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+            className="px-5 py-1.5 text-xs font-semibold rounded-[4px] bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white shadow-xs flex items-center gap-1.5 transition-colors cursor-pointer"
           >
             <Check className="w-4 h-4" />
-            <span>{tour ? 'Save Changes' : 'Publish Tour Package'}</span>
+            <span>{isSaving ? 'Saving...' : effectiveId ? 'Save Changes' : 'Publish Tour Package'}</span>
           </button>
         </div>
       </div>
 
-      {/* Main Card Container */}
       <div
         className={`w-full rounded-[4px] border shadow-xs overflow-hidden ${theme === 'dark'
           ? 'bg-slate-900 border-slate-800 text-slate-100'
           : 'bg-white border-slate-200 text-slate-900'
           }`}
       >
-        {/* Header Bar */}
         <div
           className={`px-5 py-4 border-b flex items-center justify-between shrink-0 ${theme === 'dark' ? 'border-slate-800 bg-slate-900/90' : 'border-slate-200 bg-slate-50/90'
             }`}
@@ -368,16 +591,15 @@ export const TourPackageEditorModal: React.FC<TourPackageEditorModalProps> = ({
             </div>
             <div>
               <h2 className="text-base sm:text-lg font-semibold text-slate-900 dark:text-white">
-                {tour ? `Edit Package: ${tour.title}` : 'Add New Tour Package'}
+                {effectiveId ? `Edit Package: ${title}` : 'Add New Tour Package'}
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                Configure itinerary, inclusions/exclusions, FAQs & comprehensive descriptions
+                Configure itinerary, inclusions/exclusions, hotel & comprehensive descriptions
               </p>
             </div>
           </div>
         </div>
 
-        {/* Tab Navigation Bar */}
         <div
           className={`flex items-center gap-1 px-4 border-b overflow-x-auto shrink-0 select-none ${theme === 'dark' ? 'border-slate-800 bg-slate-950/40' : 'border-slate-200 bg-slate-100/60'
             }`}
@@ -403,7 +625,7 @@ export const TourPackageEditorModal: React.FC<TourPackageEditorModalProps> = ({
               }`}
           >
             <FileText className="w-3.5 h-3.5" />
-            <span>About Tour & Highlights</span>
+            <span>Overview, Hotel & Facts</span>
           </button>
 
           <button
@@ -443,9 +665,7 @@ export const TourPackageEditorModal: React.FC<TourPackageEditorModalProps> = ({
           </button>
         </div>
 
-        {/* Tab Content Body */}
         <div className="flex-1 p-5 overflow-y-auto space-y-5">
-          {/* TAB 1: BASIC INFO & DESTINATION / CATEGORY */}
           {activeTab === 'basic' && (
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -466,30 +686,78 @@ export const TourPackageEditorModal: React.FC<TourPackageEditorModalProps> = ({
                   />
                 </div>
 
-                {/* Destination Dropdown */}
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+                    Custom Slug (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={slug}
+                    onChange={(e) => setSlug(e.target.value)}
+                    placeholder="Auto-generated from title if blank"
+                    className={`w-full p-2.5 text-sm rounded-[4px] border outline-none ${theme === 'dark'
+                      ? 'bg-slate-800 border-slate-700 text-white'
+                      : 'bg-slate-50 border-slate-200 text-slate-900'
+                      }`}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+                    Subtitle (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={subtitle}
+                    onChange={(e) => setSubtitle(e.target.value)}
+                    placeholder="Short catchy tag line"
+                    className={`w-full p-2.5 text-sm rounded-[4px] border outline-none ${theme === 'dark'
+                      ? 'bg-slate-800 border-slate-700 text-white'
+                      : 'bg-slate-50 border-slate-200 text-slate-900'
+                      }`}
+                  />
+                </div>
+
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
                     Destination Territory *
                   </label>
-                  <div className="relative">
-                    <select
-                      value={destination}
-                      onChange={(e) => setDestination(e.target.value)}
-                      className={`w-full p-2.5 text-sm rounded-[4px] border outline-none font-semibold cursor-pointer ${theme === 'dark'
-                        ? 'bg-slate-800 border-slate-700 text-white'
-                        : 'bg-slate-50 border-slate-200 text-slate-900'
-                        }`}
-                    >
-                      {SUPPORTED_DESTINATIONS.map((dest) => (
-                        <option key={dest} value={dest}>
-                          {dest} Territory
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                  <select
+                    value={destinationId}
+                    onChange={(e) => {
+                      setDestinationId(e.target.value);
+                      const found = destinationsData?.find((d) => d.id === e.target.value);
+                      if (found) setDestination(found.name);
+                    }}
+                    className={`w-full p-2.5 text-sm rounded-[4px] border outline-none font-semibold cursor-pointer ${theme === 'dark'
+                      ? 'bg-slate-800 border-slate-700 text-white'
+                      : 'bg-slate-50 border-slate-200 text-slate-900'
+                      }`}
+                  >
+                    {(destinationsData || []).map((dest) => (
+                      <option key={dest.id} value={dest.id}>
+                        {dest.name} ({dest.region})
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
-                {/* Tour Category */}
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+                    Location Label *
+                  </label>
+                  <input
+                    type="text"
+                    value={locationLabel}
+                    onChange={(e) => setLocationLabel(e.target.value)}
+                    placeholder="e.g. Port Blair & Havelock Island, Andaman"
+                    className={`w-full p-2.5 text-sm rounded-[4px] border outline-none ${theme === 'dark'
+                      ? 'bg-slate-800 border-slate-700 text-white'
+                      : 'bg-slate-50 border-slate-200 text-slate-900'
+                      }`}
+                  />
+                </div>
+
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
                     Tour Category *
@@ -502,31 +770,35 @@ export const TourPackageEditorModal: React.FC<TourPackageEditorModalProps> = ({
                       : 'bg-slate-50 border-slate-200 text-slate-900'
                       }`}
                   >
-                    <option value="Honeymoon">Honeymoon Romantic</option>
                     <option value="Luxury">Luxury Premium</option>
-                    <option value="Adventure">Adventure & Scuba</option>
+                    <option value="Honeymoon">Honeymoon Romantic</option>
+                    <option value="Adventure">Adventure & Trek</option>
                     <option value="Cultural">Cultural Heritage</option>
                     <option value="Family">Family Vacation</option>
                   </select>
                 </div>
 
-                {/* Country */}
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
-                    Country / Region
+                    Travel Type *
                   </label>
-                  <input
-                    type="text"
-                    value={country}
-                    onChange={(e) => setCountry(e.target.value)}
-                    className={`w-full p-2.5 text-sm rounded-[4px] border outline-none ${theme === 'dark'
+                  <select
+                    value={travelType}
+                    onChange={(e) => setTravelType(e.target.value)}
+                    className={`w-full p-2.5 text-sm rounded-[4px] border outline-none font-semibold cursor-pointer ${theme === 'dark'
                       ? 'bg-slate-800 border-slate-700 text-white'
                       : 'bg-slate-50 border-slate-200 text-slate-900'
                       }`}
-                  />
+                  >
+                    <option value="couple">Couple</option>
+                    <option value="family">Family</option>
+                    <option value="honeymoon">Honeymoon</option>
+                    <option value="leisure">Leisure</option>
+                    <option value="adventure">Adventure</option>
+                    <option value="group">Group</option>
+                  </select>
                 </div>
 
-                {/* Duration */}
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
                     Tour Duration
@@ -535,7 +807,7 @@ export const TourPackageEditorModal: React.FC<TourPackageEditorModalProps> = ({
                     type="text"
                     value={duration}
                     onChange={(e) => setDuration(e.target.value)}
-                    placeholder="e.g. 7 Days / 6 Nights"
+                    placeholder="e.g. 6 Days / 5 Nights"
                     className={`w-full p-2.5 text-sm rounded-[4px] border outline-none ${theme === 'dark'
                       ? 'bg-slate-800 border-slate-700 text-white'
                       : 'bg-slate-50 border-slate-200 text-slate-900'
@@ -543,10 +815,9 @@ export const TourPackageEditorModal: React.FC<TourPackageEditorModalProps> = ({
                   />
                 </div>
 
-                {/* Starting Price */}
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
-                    Price per Guest (₹ INR)
+                    Price per Guest (₹ INR) *
                   </label>
                   <div className="relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-semibold">₹</span>
@@ -562,7 +833,25 @@ export const TourPackageEditorModal: React.FC<TourPackageEditorModalProps> = ({
                   </div>
                 </div>
 
-                {/* Seats Available */}
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+                    Original Strike Price (₹ INR)
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm font-semibold">₹</span>
+                    <input
+                      type="number"
+                      value={originalPrice || ''}
+                      onChange={(e) => setOriginalPrice(Number(e.target.value))}
+                      placeholder="Optional crossed out price"
+                      className={`w-full pl-8 pr-3 py-2.5 text-sm rounded-[4px] border outline-none font-semibold ${theme === 'dark'
+                        ? 'bg-slate-800 border-slate-700 text-white'
+                        : 'bg-slate-50 border-slate-200 text-slate-900'
+                        }`}
+                    />
+                  </div>
+                </div>
+
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
                     Available Seats
@@ -578,26 +867,66 @@ export const TourPackageEditorModal: React.FC<TourPackageEditorModalProps> = ({
                   />
                 </div>
 
-                {/* Status */}
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
-                    Publication Status
+                    Badge Label
                   </label>
-                  <select
-                    value={status}
-                    onChange={(e) => setStatus(e.target.value as Tour['status'])}
-                    className={`w-full p-2.5 text-sm rounded-[4px] border outline-none font-semibold ${theme === 'dark'
+                  <input
+                    type="text"
+                    value={badgeLabel}
+                    onChange={(e) => setBadgeLabel(e.target.value)}
+                    placeholder="e.g. Bestseller, Couple Special"
+                    className={`w-full p-2.5 text-sm rounded-[4px] border outline-none ${theme === 'dark'
                       ? 'bg-slate-800 border-slate-700 text-white'
                       : 'bg-slate-50 border-slate-200 text-slate-900'
                       }`}
-                  >
-                    <option value="Published">Published (Live in catalog)</option>
-                    <option value="Draft">Draft (Hidden)</option>
-                    <option value="Archived">Archived</option>
-                  </select>
+                  />
                 </div>
 
-                {/* Featured Cover Image Upload */}
+                <div className="flex items-center gap-3 pt-6">
+                  <input
+                    type="checkbox"
+                    id="isFeaturedToggle"
+                    checked={isFeatured}
+                    onChange={(e) => setIsFeatured(e.target.checked)}
+                    className="w-4 h-4 rounded text-blue-600 cursor-pointer"
+                  />
+                  <label htmlFor="isFeaturedToggle" className="text-xs font-semibold text-slate-700 dark:text-slate-300 cursor-pointer">
+                    Feature on Home & Catalog Bento Grid
+                  </label>
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+                    Associated Travel Themes
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {(themesData || []).map((t) => {
+                      const isSelected = selectedThemeIds.includes(t.id);
+                      return (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => {
+                            if (isSelected) {
+                              setSelectedThemeIds(selectedThemeIds.filter((id) => id !== t.id));
+                            } else {
+                              setSelectedThemeIds([...selectedThemeIds, t.id]);
+                            }
+                          }}
+                          className={`px-3 py-1 rounded-[4px] text-xs font-semibold border transition-colors cursor-pointer ${
+                            isSelected
+                              ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                              : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-blue-400'
+                          }`}
+                        >
+                          {t.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
                 <div className="md:col-span-2">
                   <ImageUploadField
                     label="Featured Cover Image *"
@@ -611,19 +940,34 @@ export const TourPackageEditorModal: React.FC<TourPackageEditorModalProps> = ({
             </div>
           )}
 
-          {/* TAB 2: ABOUT TOUR & HIGHLIGHTS */}
           {activeTab === 'about' && (
             <div className="space-y-5">
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
-                  About Tour Description (Comprehensive Overview)
+                  Short Description (Card previews)
+                </label>
+                <textarea
+                  rows={2}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Short 1-2 sentence preview..."
+                  className={`w-full p-2.5 text-sm rounded-[4px] border outline-none leading-relaxed ${theme === 'dark'
+                    ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500'
+                    : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-blue-600'
+                    }`}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
+                  Comprehensive Overview (Full detail page)
                 </label>
                 <textarea
                   rows={4}
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Describe the experience, scenery, accommodations, and unique travel highlights..."
-                  className={`w-full p-3 text-sm rounded-[4px] border outline-none leading-relaxed ${theme === 'dark'
+                  value={overview}
+                  onChange={(e) => setOverview(e.target.value)}
+                  placeholder="Detailed multi-paragraph description..."
+                  className={`w-full p-2.5 text-sm rounded-[4px] border outline-none leading-relaxed ${theme === 'dark'
                     ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500'
                     : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-blue-600'
                     }`}
@@ -667,7 +1011,7 @@ export const TourPackageEditorModal: React.FC<TourPackageEditorModalProps> = ({
                         handleAddHighlight();
                       }
                     }}
-                    placeholder="Add a new highlight (e.g. Scuba diving with certified PADI divemasters)..."
+                    placeholder="Add a new highlight..."
                     className={`flex-1 p-2 text-xs sm:text-sm rounded-[4px] border outline-none ${theme === 'dark'
                       ? 'bg-slate-800 border-slate-700 text-white'
                       : 'bg-slate-50 border-slate-200 text-slate-900'
@@ -683,10 +1027,142 @@ export const TourPackageEditorModal: React.FC<TourPackageEditorModalProps> = ({
                   </button>
                 </div>
               </div>
+
+              <div className="p-4 rounded-[4px] border border-slate-200 dark:border-slate-800 space-y-4">
+                <h4 className="font-semibold text-xs uppercase tracking-wider text-slate-500">
+                  Hotel & Accommodation Details
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Hotel Name</label>
+                    <input
+                      type="text"
+                      value={hotelName}
+                      onChange={(e) => setHotelName(e.target.value)}
+                      placeholder="e.g. Sea Shell Resort & Spa"
+                      className={`w-full p-2 text-xs rounded-[4px] border outline-none ${theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'}`}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Stars (1-5)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      max={5}
+                      value={hotelStars}
+                      onChange={(e) => setHotelStars(Number(e.target.value))}
+                      className={`w-full p-2 text-xs rounded-[4px] border outline-none ${theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'}`}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Room Category</label>
+                    <input
+                      type="text"
+                      value={hotelRoom}
+                      onChange={(e) => setHotelRoom(e.target.value)}
+                      placeholder="e.g. Deluxe Ocean View Villa"
+                      className={`w-full p-2 text-xs rounded-[4px] border outline-none ${theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'}`}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Hotel Amenities</label>
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {hotelAmenities.map((amenity, idx) => (
+                      <span key={idx} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-[4px] text-xs bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                        {amenity}
+                        <button type="button" onClick={() => handleRemoveAmenity(idx)} className="text-slate-400 hover:text-rose-500">
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newAmenityInput}
+                      onChange={(e) => setNewAmenityInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleAddAmenity();
+                        }
+                      }}
+                      placeholder="Add amenity (e.g. Swimming Pool, Free Wi-Fi, Spa)..."
+                      className={`flex-1 p-2 text-xs rounded-[4px] border outline-none ${theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'}`}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddAmenity}
+                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-[4px]"
+                    >
+                      Add
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-4 rounded-[4px] border border-slate-200 dark:border-slate-800 space-y-3">
+                <h4 className="font-semibold text-xs uppercase tracking-wider text-slate-500">
+                  Trip Facts
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Group Size</label>
+                    <input
+                      type="text"
+                      value={groupSize}
+                      onChange={(e) => setGroupSize(e.target.value)}
+                      placeholder="e.g. 2-12 travelers"
+                      className={`w-full p-2 text-xs rounded-[4px] border outline-none ${theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'}`}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Languages</label>
+                    <input
+                      type="text"
+                      value={languages}
+                      onChange={(e) => setLanguages(e.target.value)}
+                      placeholder="e.g. English, Hindi"
+                      className={`w-full p-2 text-xs rounded-[4px] border outline-none ${theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'}`}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Best Season</label>
+                    <input
+                      type="text"
+                      value={bestSeason}
+                      onChange={(e) => setBestSeason(e.target.value)}
+                      placeholder="e.g. Oct - May"
+                      className={`w-full p-2 text-xs rounded-[4px] border outline-none ${theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'}`}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Starting Point</label>
+                    <input
+                      type="text"
+                      value={startingPoint}
+                      onChange={(e) => setStartingPoint(e.target.value)}
+                      placeholder="e.g. Port Blair Airport"
+                      className={`w-full p-2 text-xs rounded-[4px] border outline-none ${theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'}`}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">Ending Point</label>
+                    <input
+                      type="text"
+                      value={endingPoint}
+                      onChange={(e) => setEndingPoint(e.target.value)}
+                      placeholder="e.g. Port Blair Airport"
+                      className={`w-full p-2 text-xs rounded-[4px] border outline-none ${theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'}`}
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
-          {/* TAB 3: DAY-BY-DAY ITINERARY BUILDER (MATCHING USER'S SCREENSHOT) */}
           {activeTab === 'itinerary' && (
             <div className="space-y-5">
               <div className="flex items-center justify-between">
@@ -695,20 +1171,19 @@ export const TourPackageEditorModal: React.FC<TourPackageEditorModalProps> = ({
                     Detailed Day-by-Day Itinerary Builder
                   </h3>
                   <p className="text-xs text-slate-500">
-                    Configure day titles, descriptions, transport, activities, meals, accommodations & photo highlights
+                    Configure day titles, descriptions, transport, activities, meals & accommodations
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={handleAddDay}
-                  className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-[4px] shadow-sm transition-colors"
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-[4px] shadow-sm transition-colors cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>Add Next Day</span>
                 </button>
               </div>
 
-              {/* Itinerary Cards matching user reference screenshot */}
               <div className="space-y-4">
                 {itinerary.map((day, idx) => {
                   const isExpanded = expandedDays[day.dayNumber] ?? true;
@@ -720,45 +1195,36 @@ export const TourPackageEditorModal: React.FC<TourPackageEditorModalProps> = ({
                         : 'bg-white border-slate-200'
                         }`}
                     >
-                      {/* Day Header matching image: [MapPin] Day-01   Arrival Port Blair & Cellular Jail Memorial */}
                       <div
                         onClick={() => toggleDayExpand(day.dayNumber)}
-                        className={`p-4 flex items-center justify-between cursor-pointer select-none ${isExpanded
-                          ? 'border-b border-slate-100 dark:border-slate-800'
-                          : ''
+                        className={`p-3.5 flex items-center justify-between cursor-pointer border-b transition-colors select-none ${theme === 'dark'
+                          ? 'border-slate-800 bg-slate-800/40 hover:bg-slate-800/70'
+                          : 'border-slate-100 bg-slate-50/70 hover:bg-slate-100/60'
                           }`}
                       >
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-[4px] bg-blue-50 dark:bg-blue-950/80 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
-                            <MapPin className="w-4 h-4" />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-sm text-slate-900 dark:text-white">
-                                Day-{String(day.dayNumber).padStart(2, '0')}
-                              </span>
-                              <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">
-                                {day.title}
-                              </span>
-                            </div>
-                            <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">
-                              {day.description}
-                            </p>
-                          </div>
+                        <div className="flex items-center gap-2.5">
+                          <span className="w-7 h-7 rounded-[4px] bg-blue-600 text-white font-bold text-xs flex items-center justify-center shrink-0">
+                            D{day.dayNumber}
+                          </span>
+                          <span className="font-semibold text-xs sm:text-sm text-slate-900 dark:text-white">
+                            {day.title || `Day ${day.dayNumber}`}
+                          </span>
                         </div>
 
                         <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleRemoveDay(day.dayNumber);
-                            }}
-                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-[4px]"
-                            title="Delete Day"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          {itinerary.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRemoveDay(day.dayNumber);
+                              }}
+                              className="p-1 text-slate-400 hover:text-rose-600 cursor-pointer"
+                              title="Delete Day"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
                           {isExpanded ? (
                             <ChevronUp className="w-4 h-4 text-slate-400" />
                           ) : (
@@ -767,49 +1233,44 @@ export const TourPackageEditorModal: React.FC<TourPackageEditorModalProps> = ({
                         </div>
                       </div>
 
-                      {/* Day Detailed Content (Editable + Visual Presentation) */}
                       {isExpanded && (
                         <div className="p-4 space-y-4">
-                          {/* Title & Description inputs */}
-                          <div className="grid grid-cols-1 gap-3">
-                            <div>
-                              <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1">
-                                Day Title
-                              </label>
-                              <input
-                                type="text"
-                                value={day.title}
-                                onChange={(e) => handleUpdateDay(idx, { title: e.target.value })}
-                                placeholder="e.g. Arrival Port Blair & Cellular Jail Memorial"
-                                className={`w-full p-2 text-xs sm:text-sm rounded-[4px] border outline-none font-semibold ${theme === 'dark'
-                                  ? 'bg-slate-800 border-slate-700 text-white'
-                                  : 'bg-slate-50 border-slate-200 text-slate-900'
-                                  }`}
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-1">
-                                Day Overview Description
-                              </label>
-                              <textarea
-                                rows={2}
-                                value={day.description}
-                                onChange={(e) => handleUpdateDay(idx, { description: e.target.value })}
-                                placeholder="Transfer from airport to hotel. Visit Cellular Jail and attend the national Sound & Light program."
-                                className={`w-full p-2 text-xs sm:text-sm rounded-[4px] border outline-none ${theme === 'dark'
-                                  ? 'bg-slate-800 border-slate-700 text-white'
-                                  : 'bg-slate-50 border-slate-200 text-slate-900'
-                                  }`}
-                              />
-                            </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">
+                              Day Title *
+                            </label>
+                            <input
+                              type="text"
+                              value={day.title}
+                              onChange={(e) => handleUpdateDay(idx, { title: e.target.value })}
+                              placeholder="e.g. Arrival in Port Blair & Cellular Jail Memorial"
+                              className={`w-full p-2 text-xs sm:text-sm rounded-[4px] border outline-none font-semibold ${theme === 'dark'
+                                ? 'bg-slate-800 border-slate-700 text-white'
+                                : 'bg-slate-50 border-slate-200 text-slate-900'
+                                }`}
+                            />
                           </div>
 
-                          {/* 4 Structured Metadata Rows with Icons matching user screenshot */}
+                          <div>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">
+                              Day Activity Description
+                            </label>
+                            <textarea
+                              rows={3}
+                              value={day.description}
+                              onChange={(e) => handleUpdateDay(idx, { description: e.target.value })}
+                              placeholder="Describe activities, transfer details, visits..."
+                              className={`w-full p-2 text-xs sm:text-sm rounded-[4px] border outline-none leading-relaxed ${theme === 'dark'
+                                ? 'bg-slate-800 border-slate-700 text-white'
+                                : 'bg-slate-50 border-slate-200 text-slate-900'
+                                }`}
+                            />
+                          </div>
+
                           <div
                             className={`p-3.5 rounded-[4px] border space-y-2.5 ${theme === 'dark' ? 'bg-slate-800/40 border-slate-700/80' : 'bg-slate-50/80 border-slate-200'
                               }`}
                           >
-                            {/* Transport */}
                             <div className="flex flex-col sm:flex-row sm:items-center gap-2 text-xs">
                               <div className="flex items-center gap-2 w-36 shrink-0 font-semibold text-slate-800 dark:text-slate-200">
                                 <Car className="w-4 h-4 text-blue-600 dark:text-blue-400" />
@@ -828,7 +1289,6 @@ export const TourPackageEditorModal: React.FC<TourPackageEditorModalProps> = ({
                               />
                             </div>
 
-                            {/* Activities */}
                             <div className="flex flex-col sm:flex-row sm:items-center gap-2 text-xs">
                               <div className="flex items-center gap-2 w-36 shrink-0 font-semibold text-slate-800 dark:text-slate-200">
                                 <CheckCircle2 className="w-4 h-4 text-blue-600 dark:text-blue-400" />
@@ -847,7 +1307,6 @@ export const TourPackageEditorModal: React.FC<TourPackageEditorModalProps> = ({
                               />
                             </div>
 
-                            {/* Meals */}
                             <div className="flex flex-col sm:flex-row sm:items-center gap-2 text-xs">
                               <div className="flex items-center gap-2 w-36 shrink-0 font-semibold text-slate-800 dark:text-slate-200">
                                 <Utensils className="w-4 h-4 text-blue-600 dark:text-blue-400" />
@@ -866,7 +1325,6 @@ export const TourPackageEditorModal: React.FC<TourPackageEditorModalProps> = ({
                               />
                             </div>
 
-                            {/* Accommodation */}
                             <div className="flex flex-col sm:flex-row sm:items-center gap-2 text-xs">
                               <div className="flex items-center gap-2 w-36 shrink-0 font-semibold text-slate-800 dark:text-slate-200">
                                 <Building className="w-4 h-4 text-blue-600 dark:text-blue-400" />
@@ -886,7 +1344,6 @@ export const TourPackageEditorModal: React.FC<TourPackageEditorModalProps> = ({
                             </div>
                           </div>
 
-                          {/* Day Highlights Photos Slider/Thumbnails matching user screenshot */}
                           <div>
                             <div className="flex items-center justify-between mb-2">
                               <div className="flex items-center gap-2">
@@ -899,7 +1356,6 @@ export const TourPackageEditorModal: React.FC<TourPackageEditorModalProps> = ({
                               </div>
                             </div>
 
-                            {/* Photo Thumbnails Row */}
                             <div className="flex items-center gap-2.5 overflow-x-auto pb-2">
                               {(day.highlightPhotos || []).map((imgUrl, photoIdx) => (
                                 <div
@@ -923,7 +1379,6 @@ export const TourPackageEditorModal: React.FC<TourPackageEditorModalProps> = ({
                               ))}
                             </div>
 
-                            {/* Add Photo Input */}
                             <div className="flex gap-2 mt-2">
                               <input
                                 type="url"
@@ -959,10 +1414,8 @@ export const TourPackageEditorModal: React.FC<TourPackageEditorModalProps> = ({
             </div>
           )}
 
-          {/* TAB 4: INCLUSIONS & EXCLUSIONS */}
           {activeTab === 'includes' && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Inclusions */}
               <div
                 className={`p-4 rounded-[4px] border space-y-3 ${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
                   }`}
@@ -1023,7 +1476,6 @@ export const TourPackageEditorModal: React.FC<TourPackageEditorModalProps> = ({
                 </div>
               </div>
 
-              {/* Exclusions */}
               <div
                 className={`p-4 rounded-[4px] border space-y-3 ${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
                   }`}
@@ -1086,7 +1538,6 @@ export const TourPackageEditorModal: React.FC<TourPackageEditorModalProps> = ({
             </div>
           )}
 
-          {/* TAB 5: TOUR FAQS */}
           {activeTab === 'faqs' && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
@@ -1100,10 +1551,9 @@ export const TourPackageEditorModal: React.FC<TourPackageEditorModalProps> = ({
                 </div>
               </div>
 
-              {/* FAQs list */}
               <div className="space-y-3">
                 {faqs.map((faq) => {
-                  const isOpen = expandedFaqs[faq.id] ?? false;
+                  const isFaqOpen = expandedFaqs[faq.id] ?? false;
                   return (
                     <div
                       key={faq.id}
@@ -1112,7 +1562,7 @@ export const TourPackageEditorModal: React.FC<TourPackageEditorModalProps> = ({
                     >
                       <div
                         onClick={() =>
-                          setExpandedFaqs((prev) => ({ ...prev, [faq.id]: !isOpen }))
+                          setExpandedFaqs((prev) => ({ ...prev, [faq.id]: !isFaqOpen }))
                         }
                         className="p-3 flex items-center justify-between cursor-pointer select-none"
                       >
@@ -1134,7 +1584,7 @@ export const TourPackageEditorModal: React.FC<TourPackageEditorModalProps> = ({
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
-                          {isOpen ? (
+                          {isFaqOpen ? (
                             <ChevronUp className="w-4 h-4 text-slate-400" />
                           ) : (
                             <ChevronDown className="w-4 h-4 text-slate-400" />
@@ -1142,7 +1592,7 @@ export const TourPackageEditorModal: React.FC<TourPackageEditorModalProps> = ({
                         </div>
                       </div>
 
-                      {isOpen && (
+                      {isFaqOpen && (
                         <div className="p-3 border-t border-slate-200 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-300 leading-relaxed bg-white/50 dark:bg-slate-900/40">
                           {faq.answer}
                         </div>
@@ -1152,7 +1602,6 @@ export const TourPackageEditorModal: React.FC<TourPackageEditorModalProps> = ({
                 })}
               </div>
 
-              {/* Add New FAQ Form */}
               <div
                 className={`p-4 rounded-[4px] border space-y-3 ${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
                   }`}
@@ -1196,7 +1645,6 @@ export const TourPackageEditorModal: React.FC<TourPackageEditorModalProps> = ({
           )}
         </div>
 
-        {/* Footer Actions */}
         <div
           className={`p-4 border-t flex items-center justify-between shrink-0 ${theme === 'dark' ? 'border-slate-800 bg-slate-900' : 'border-slate-200 bg-slate-50'
             }`}
@@ -1219,11 +1667,12 @@ export const TourPackageEditorModal: React.FC<TourPackageEditorModalProps> = ({
             </button>
             <button
               type="button"
+              disabled={isSaving}
               onClick={handleSaveAll}
-              className="px-5 py-2 text-xs font-semibold rounded-[4px] bg-blue-600 hover:bg-blue-700 text-white shadow-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+              className="px-5 py-2 text-xs font-semibold rounded-[4px] bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white shadow-xs flex items-center gap-1.5 transition-colors cursor-pointer"
             >
               <Check className="w-4 h-4" />
-              <span>{tour ? 'Save Package Changes' : 'Publish Tour Package'}</span>
+              <span>{isSaving ? 'Saving...' : effectiveId ? 'Save Package Changes' : 'Publish Tour Package'}</span>
             </button>
           </div>
         </div>
