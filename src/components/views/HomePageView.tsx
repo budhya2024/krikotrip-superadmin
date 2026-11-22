@@ -14,11 +14,25 @@ import {
   MapPin,
   ArrowUp,
   ArrowDown,
+  Ticket,
+  Copy,
+  Check,
+  RotateCcw,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTheme } from '../../context/ThemeContext';
 import { DeleteConfirmModal } from '../common/DeleteConfirmModal';
 import { ImageUploadField } from '../common/ImageUploadField';
+import {
+  useAdminCouponsQuery,
+  useToggleCouponActiveMutation,
+  useDeleteCouponMutation,
+  type AdminCoupon,
+} from '../../api/coupons';
+import { CouponEditorModal } from './CouponEditorModal';
+import { CouponRedemptionsDrawer } from './CouponRedemptionsDrawer';
 import {
   useDestinationsQuery,
   useCreateDestinationMutation,
@@ -116,7 +130,7 @@ const formatSecondsToDuration = (sec: number | null | undefined): string => {
 
 export const HomePageView: React.FC = () => {
   const { theme } = useTheme();
-  const [activeTab, setActiveTab] = useState<'offers' | 'videos' | 'destinations' | 'themes' | 'faqs'>('destinations');
+  const [activeTab, setActiveTab] = useState<'offers' | 'videos' | 'destinations' | 'themes' | 'faqs' | 'coupons'>('destinations');
   const [searchQuery, setSearchQuery] = useState('');
   const [faqCategoryFilter, setFaqCategoryFilter] = useState('All');
   const [faqScopeFilter, setFaqScopeFilter] = useState<'All' | 'general' | 'contact'>('All');
@@ -159,6 +173,26 @@ export const HomePageView: React.FC = () => {
   const toggleFaqActiveMutation = useToggleFaqActiveMutation();
   const deleteFaqMutation = useDeleteFaqMutation();
   const reorderFaqsMutation = useReorderFaqsMutation();
+
+  const [couponSearch, setCouponSearch] = useState('');
+  const [couponStatusFilter, setCouponStatusFilter] = useState<'all' | 'true' | 'false'>('all');
+  const [couponPage, setCouponPage] = useState(1);
+  const [isCouponModalOpen, setIsCouponModalOpen] = useState(false);
+  const [editingCoupon, setEditingCoupon] = useState<AdminCoupon | null>(null);
+  const [isRedemptionsOpen, setIsRedemptionsOpen] = useState(false);
+  const [selectedRedemptionCoupon, setSelectedRedemptionCoupon] = useState<AdminCoupon | null>(null);
+  const [copiedCouponCode, setCopiedCouponCode] = useState<string | null>(null);
+
+  const { data: couponsData, isLoading: isCouponsLoading } = useAdminCouponsQuery({
+    q: couponSearch.trim() || undefined,
+    isActive: couponStatusFilter !== 'all' ? couponStatusFilter : undefined,
+    page: couponPage,
+    limit: 15,
+  });
+  const coupons = couponsData?.data ?? [];
+  const couponsMeta = couponsData?.meta;
+  const toggleCouponActiveMutation = useToggleCouponActiveMutation();
+  const deleteCouponMutation = useDeleteCouponMutation();
 
   const [isOfferModalOpen, setIsOfferModalOpen] = useState(false);
   const [editingOffer, setEditingOffer] = useState<AdminOffer | null>(null);
@@ -217,8 +251,44 @@ export const HomePageView: React.FC = () => {
   const [deleteTarget, setDeleteTarget] = useState<{
     id: string;
     title: string;
-    type: 'Offer' | 'Video' | 'Destination' | 'Theme' | 'FAQ';
+    type: 'Offer' | 'Video' | 'Destination' | 'Theme' | 'FAQ' | 'Coupon';
   } | null>(null);
+
+  const handleOpenAddCoupon = () => {
+    setEditingCoupon(null);
+    setIsCouponModalOpen(true);
+  };
+
+  const handleOpenEditCoupon = (c: AdminCoupon) => {
+    setEditingCoupon(c);
+    setIsCouponModalOpen(true);
+  };
+
+  const handleOpenRedemptions = (c: AdminCoupon) => {
+    setSelectedRedemptionCoupon(c);
+    setIsRedemptionsOpen(true);
+  };
+
+  const handleCopyCouponCode = (code: string) => {
+    navigator.clipboard.writeText(code);
+    setCopiedCouponCode(code);
+    toast.success(`Copied "${code}" to clipboard`);
+    setTimeout(() => {
+      setCopiedCouponCode((prev) => (prev === code ? null : prev));
+    }, 2000);
+  };
+
+  const handleToggleCouponActive = (c: AdminCoupon) => {
+    toggleCouponActiveMutation.mutate(
+      { id: c.id, isActive: !c.isActive },
+      {
+        onSuccess: (updated) => {
+          toast.success(`Coupon ${updated.code} is now ${updated.isActive ? 'active' : 'inactive'}`);
+        },
+        onError: () => toast.error('Failed to update coupon status'),
+      },
+    );
+  };
 
   const handleOpenAddOffer = () => {
     setEditingOffer(null);
@@ -661,6 +731,11 @@ export const HomePageView: React.FC = () => {
         onSuccess: () => toast.success('FAQ deleted'),
         onError: () => toast.error('Failed to delete FAQ'),
       });
+    } else if (deleteTarget.type === 'Coupon') {
+      deleteCouponMutation.mutate(deleteTarget.id, {
+        onSuccess: () => toast.success('Coupon deleted'),
+        onError: () => toast.error('Failed to delete coupon'),
+      });
     }
     setDeleteTarget(null);
   };
@@ -729,6 +804,15 @@ export const HomePageView: React.FC = () => {
               <span>Add Home FAQ</span>
             </button>
           )}
+          {activeTab === 'coupons' && (
+            <button
+              onClick={handleOpenAddCoupon}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-[4px] bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-semibold transition-colors cursor-pointer shadow-xs"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add Coupon</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -795,6 +879,18 @@ export const HomePageView: React.FC = () => {
         >
           <HelpCircle className="w-4 h-4" />
           <span>Home Page FAQs ({faqs.length})</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('coupons')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-[4px] text-xs sm:text-sm font-semibold transition-colors cursor-pointer ${
+            activeTab === 'coupons'
+              ? 'bg-blue-600 text-white shadow-xs'
+              : 'text-slate-600 dark:text-slate-400 hover:text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <Ticket className="w-4 h-4" />
+          <span>Discount Coupons ({couponsMeta?.total ?? coupons.length})</span>
         </button>
       </div>
 
@@ -1550,6 +1646,293 @@ export const HomePageView: React.FC = () => {
         </div>
       )}
 
+      {activeTab === 'coupons' && (
+        <div className="space-y-4">
+          <div
+            className={`p-4 rounded-[4px] border flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 ${
+              theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+            }`}
+          >
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search coupons by code or description..."
+                value={couponSearch}
+                onChange={(e) => {
+                  setCouponSearch(e.target.value);
+                  setCouponPage(1);
+                }}
+                className={`w-full pl-9 pr-3 py-2 text-xs sm:text-sm rounded-[4px] border outline-none font-semibold ${
+                  theme === 'dark'
+                    ? 'bg-slate-800 border-slate-700 text-white placeholder-slate-500'
+                    : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400'
+                }`}
+              />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <select
+                value={couponStatusFilter}
+                onChange={(e) => {
+                  setCouponStatusFilter(e.target.value as 'all' | 'true' | 'false');
+                  setCouponPage(1);
+                }}
+                className={`p-2 text-xs sm:text-sm rounded-[4px] border outline-none font-semibold cursor-pointer ${
+                  theme === 'dark'
+                    ? 'bg-slate-800 border-slate-700 text-white'
+                    : 'bg-slate-50 border-slate-200 text-slate-900'
+                }`}
+              >
+                <option value="all">All Statuses</option>
+                <option value="true">Active Only</option>
+                <option value="false">Inactive Only</option>
+              </select>
+
+              {(couponSearch || couponStatusFilter !== 'all') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCouponSearch('');
+                    setCouponStatusFilter('all');
+                    setCouponPage(1);
+                  }}
+                  className="p-2 text-xs font-semibold rounded-[4px] border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-slate-900 dark:hover:text-white cursor-pointer"
+                  title="Reset filters"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div
+            className={`rounded-[4px] border overflow-hidden ${
+              theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+            }`}
+          >
+            {isCouponsLoading ? (
+              <div className="p-8 text-center text-xs text-slate-500">Loading discount coupons...</div>
+            ) : coupons.length === 0 ? (
+              <div className="p-8 text-center text-xs text-slate-500">
+                No coupons found matching your criteria. Click &quot;Add Coupon&quot; above to create one.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-500 uppercase tracking-wider text-[10px] border-b border-slate-200 dark:border-slate-800">
+                    <tr>
+                      <th className="p-3">Coupon Code</th>
+                      <th className="p-3">Discount</th>
+                      <th className="p-3">Min Order</th>
+                      <th className="p-3">Validity</th>
+                      <th className="p-3">Usage / Limits</th>
+                      <th className="p-3">Scope</th>
+                      <th className="p-3">Visibility</th>
+                      <th className="p-3">Status</th>
+                      <th className="p-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+                    {coupons.map((c) => (
+                      <tr
+                        key={c.id}
+                        className="hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
+                      >
+                        <td className="p-3">
+                          <div className="flex items-center gap-1.5">
+                            <span className="px-2 py-0.5 rounded-[3px] bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono font-bold tracking-wider text-xs">
+                              {c.code}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleCopyCouponCode(c.code)}
+                              className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-[3px] cursor-pointer"
+                              title="Copy Code"
+                            >
+                              {copiedCouponCode === c.code ? (
+                                <Check className="w-3.5 h-3.5 text-emerald-500" />
+                              ) : (
+                                <Copy className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                          </div>
+                          {c.description && (
+                            <span className="text-[11px] text-slate-500 block mt-1 line-clamp-1 max-w-xs">
+                              {c.description}
+                            </span>
+                          )}
+                        </td>
+
+                        <td className="p-3 whitespace-nowrap">
+                          <span className="font-bold text-emerald-600 dark:text-emerald-400 block">
+                            {c.discountType === 'percent'
+                              ? `${c.discountValue}% OFF`
+                              : `₹${Number(c.discountValue).toLocaleString('en-IN')} OFF`}
+                          </span>
+                          {c.discountType === 'percent' && c.maxDiscountPaise !== null && (
+                            <span className="text-[10px] text-slate-500 block">
+                              Max ₹{Math.round(c.maxDiscountPaise / 100).toLocaleString('en-IN')}
+                            </span>
+                          )}
+                        </td>
+
+                        <td className="p-3 whitespace-nowrap">
+                          {c.minOrderPaise !== null ? (
+                            <span className="font-semibold text-slate-700 dark:text-slate-300">
+                              ₹{Math.round(c.minOrderPaise / 100).toLocaleString('en-IN')}
+                            </span>
+                          ) : (
+                            <span className="text-slate-400">None</span>
+                          )}
+                        </td>
+
+                        <td className="p-3 whitespace-nowrap">
+                          {c.validFrom || c.validUntil ? (
+                            <div className="space-y-0.5 text-[11px]">
+                              {c.validFrom && (
+                                <div className="text-slate-500">
+                                  From:{' '}
+                                  <span className="text-slate-700 dark:text-slate-300 font-semibold">
+                                    {new Date(c.validFrom).toLocaleDateString('en-IN')}
+                                  </span>
+                                </div>
+                              )}
+                              {c.validUntil && (
+                                <div className="text-slate-500">
+                                  Until:{' '}
+                                  <span className="text-slate-700 dark:text-slate-300 font-semibold">
+                                    {new Date(c.validUntil).toLocaleDateString('en-IN')}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-slate-400 text-[11px]">No expiration</span>
+                          )}
+                        </td>
+
+                        <td className="p-3 whitespace-nowrap">
+                          <span className="font-semibold block">
+                            {c.usedCount} / {c.usageLimit !== null ? c.usageLimit : '∞'} used
+                          </span>
+                          <span className="text-[10px] text-slate-500 block">
+                            {c.perUserLimit !== null ? `Max ${c.perUserLimit} / user` : 'No user limit'}
+                          </span>
+                        </td>
+
+                        <td className="p-3 whitespace-nowrap">
+                          {c.appliesTo === 'all' ? (
+                            <span className="px-2 py-0.5 rounded-[3px] text-[10px] font-bold bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                              All Packages
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-[3px] text-[10px] font-bold bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300">
+                              {c.packageIds.length} Packages
+                            </span>
+                          )}
+                        </td>
+
+                        <td className="p-3 whitespace-nowrap">
+                          {c.isPublic ? (
+                            <span className="px-2 py-0.5 rounded-[3px] text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                              Public
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-[3px] text-[10px] font-bold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                              Hidden
+                            </span>
+                          )}
+                        </td>
+
+                        <td className="p-3 whitespace-nowrap">
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={c.isActive}
+                            onClick={() => handleToggleCouponActive(c)}
+                            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden ${
+                              c.isActive ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'
+                            }`}
+                          >
+                            <span
+                              className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${
+                                c.isActive ? 'translate-x-4' : 'translate-x-0'
+                              }`}
+                            />
+                          </button>
+                        </td>
+
+                        <td className="p-3 whitespace-nowrap text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenRedemptions(c)}
+                              className="p-1.5 rounded-[4px] text-blue-600 hover:bg-blue-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                              title="View Redemptions"
+                            >
+                              <Ticket className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditCoupon(c)}
+                              className="p-1.5 rounded-[4px] text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                              title="Edit Coupon"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setDeleteTarget({
+                                  id: c.id,
+                                  title: c.code,
+                                  type: 'Coupon',
+                                })
+                              }
+                              className="p-1.5 rounded-[4px] text-rose-500 hover:bg-rose-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                              title="Delete Coupon"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {couponsMeta && couponsMeta.totalPages > 1 && (
+              <div className="p-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs">
+                <span className="text-slate-500">
+                  Page {couponsMeta.page} of {couponsMeta.totalPages} ({couponsMeta.total} coupons)
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    disabled={couponsMeta.page <= 1}
+                    onClick={() => setCouponPage((p) => Math.max(1, p - 1))}
+                    className="p-1.5 rounded-[4px] border border-slate-200 dark:border-slate-700 disabled:opacity-40 cursor-pointer"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    disabled={couponsMeta.page >= couponsMeta.totalPages}
+                    onClick={() => setCouponPage((p) => Math.min(couponsMeta.totalPages, p + 1))}
+                    className="p-1.5 rounded-[4px] border border-slate-200 dark:border-slate-700 disabled:opacity-40 cursor-pointer"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {isOfferModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div
@@ -2250,6 +2633,18 @@ export const HomePageView: React.FC = () => {
           warningMessage="This content item will be permanently removed from the live KrikoTrip home page."
         />
       )}
+
+      <CouponEditorModal
+        isOpen={isCouponModalOpen}
+        onClose={() => setIsCouponModalOpen(false)}
+        coupon={editingCoupon}
+      />
+
+      <CouponRedemptionsDrawer
+        isOpen={isRedemptionsOpen}
+        onClose={() => setIsRedemptionsOpen(false)}
+        coupon={selectedRedemptionCoupon}
+      />
     </div>
   );
 };

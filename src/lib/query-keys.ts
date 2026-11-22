@@ -63,6 +63,10 @@ export const queryKeys = {
   },
   coupons: {
     all: ['coupons'] as const,
+    list: (filters?: Record<string, unknown>) => ['coupons', 'list', filters] as const,
+    detail: (id: string) => ['coupons', 'detail', id] as const,
+    redemptions: (id: string, filters?: Record<string, unknown>) =>
+      ['coupons', 'redemptions', id, filters] as const,
   },
   contacts: {
     all: ['contacts'] as const,
