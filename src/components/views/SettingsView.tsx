@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Save,
   CheckCircle,
@@ -14,12 +14,16 @@ import {
   Shield,
   KeyRound,
   AlertCircle,
+  Upload,
+  Loader2,
+  Trash2,
 } from 'lucide-react';
 import type { AgencySettings } from '../../types';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../auth/use-auth';
 import { authClient } from '../../lib/auth-client';
 import { updateAdminProfile } from '../../api/admin';
+import { uploadAdminImage } from '../../api/media';
 import brandLogo from '../../assets/images/brand-logo.png';
 
 interface SettingsViewProps {
@@ -45,15 +49,64 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [adminAvatar, setAdminAvatar] = useState(adminUser?.avatarUrl || '');
   const [profileSavedSuccess, setProfileSavedSuccess] = useState(false);
   const [profileError, setProfileError] = useState('');
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
+  const handleAvatarFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+      setProfileError('Avatar photo exceeds 10MB limit.');
+      return;
+    }
+
+    setIsUploadingAvatar(true);
+    setProfileError('');
+
+    try {
+      const uploadRes = await uploadAdminImage(file, 'avatar');
+      await updateAdminProfile({ phone: adminPhone || null, avatarMediaId: uploadRes.id });
+      await refreshSession();
+      setAdminAvatar(uploadRes.url);
+      setProfileSavedSuccess(true);
+      setTimeout(() => setProfileSavedSuccess(false), 3000);
+    } catch {
+      setProfileError('Failed to upload avatar image. Please try again.');
+    } finally {
+      setIsUploadingAvatar(false);
+      if (avatarInputRef.current) {
+        avatarInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleRemoveAvatar = async () => {
+    setIsUploadingAvatar(true);
+    setProfileError('');
+    try {
+      await updateAdminProfile({ phone: adminPhone || null, avatarMediaId: null });
+      await refreshSession();
+      setAdminAvatar('');
+      setProfileSavedSuccess(true);
+      setTimeout(() => setProfileSavedSuccess(false), 3000);
+    } catch {
+      setProfileError('Failed to remove avatar. Please try again.');
+    } finally {
+      setIsUploadingAvatar(false);
+    }
+  };
+
+  const [prevUser, setPrevUser] = useState(adminUser);
+  if (adminUser !== prevUser) {
+    setPrevUser(adminUser);
     if (adminUser) {
       setAdminName(adminUser.name);
       setAdminEmail(adminUser.email);
       setAdminPhone(adminUser.phone || '');
       setAdminAvatar(adminUser.avatarUrl || '');
     }
-  }, [adminUser]);
+  }
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -225,25 +278,62 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             )}
 
             <form onSubmit={handleProfileSubmit} className="space-y-4">
-              <div className="flex items-center gap-4 p-3 rounded-[4px] bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
-                {adminAvatar ? (
-                  <img
-                    src={adminAvatar}
-                    alt={adminName}
-                    className="w-16 h-16 rounded-full object-cover ring-4 ring-blue-500/20 shrink-0"
-                  />
-                ) : (
-                  <div className="w-16 h-16 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center text-xl ring-4 ring-blue-500/20 shrink-0">
-                    {adminName ? adminName.charAt(0).toUpperCase() : 'A'}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-[4px] bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+                <div className="flex items-center gap-4">
+                  {adminAvatar ? (
+                    <img
+                      src={adminAvatar}
+                      alt={adminName}
+                      className="w-16 h-16 rounded-full object-cover ring-4 ring-blue-500/20 shrink-0"
+                    />
+                  ) : (
+                    <div className="w-16 h-16 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center text-xl ring-4 ring-blue-500/20 shrink-0">
+                      {adminName ? adminName.charAt(0).toUpperCase() : 'A'}
+                    </div>
+                  )}
+                  <div className="space-y-1">
+                    <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 block">
+                      Profile Avatar Photo
+                    </span>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Displayed in the top navigation bar, sidebar, and admin session audit logs.
+                    </p>
                   </div>
-                )}
-                <div className="space-y-1">
-                  <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 block">
-                    Profile Avatar Photo
-                  </span>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    Displayed in the top navigation bar, sidebar, and admin session audit logs.
-                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    ref={avatarInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    className="hidden"
+                    onChange={handleAvatarFile}
+                  />
+                  <button
+                    type="button"
+                    disabled={isUploadingAvatar}
+                    onClick={() => avatarInputRef.current?.click()}
+                    className="px-3 py-1.5 text-xs font-semibold rounded-[4px] bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-xs"
+                  >
+                    {isUploadingAvatar ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Upload className="w-3.5 h-3.5" />
+                    )}
+                    <span>Upload Photo</span>
+                  </button>
+
+                  {adminAvatar && (
+                    <button
+                      type="button"
+                      disabled={isUploadingAvatar}
+                      onClick={handleRemoveAvatar}
+                      className="px-3 py-1.5 text-xs font-semibold rounded-[4px] border border-rose-300 dark:border-rose-800 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Remove</span>
+                    </button>
+                  )}
                 </div>
               </div>
 
