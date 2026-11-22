@@ -9,7 +9,6 @@ import type {
   BlogPost,
   GalleryItem,
   ContactMessage,
-  AgencySettings,
   Vendor,
   TourReview,
   DiscountOffer,
@@ -22,7 +21,6 @@ import {
   mockBlogs,
   mockGallery,
   mockContacts,
-  defaultSettings,
   mockVendors,
   mockReviews,
   mockDiscountOffers,
@@ -89,7 +87,6 @@ export const AdminLayout: React.FC = () => {
   const [blogs, setBlogs] = useState<BlogPost[]>(mockBlogs);
   const [gallery, setGallery] = useState<GalleryItem[]>(mockGallery);
   const [contacts, setContacts] = useState<ContactMessage[]>(mockContacts);
-  const [settings, setSettings] = useState<AgencySettings>(defaultSettings);
   const [reviews, setReviews] = useState<TourReview[]>(mockReviews);
   const [discountOffers, setDiscountOffers] = useState<DiscountOffer[]>(mockDiscountOffers);
   const [trendingVideos, setTrendingVideos] = useState<TrendingVideo[]>(mockTrendingVideos);
@@ -419,12 +416,7 @@ export const AdminLayout: React.FC = () => {
       case 'chatbot':
         return <ChatbotView />;
       case 'settings':
-        return (
-          <SettingsView
-            settings={settings}
-            onSaveSettings={(newSettings) => setSettings(newSettings)}
-          />
-        );
+        return <SettingsView />;
       default:
         return null;
     }

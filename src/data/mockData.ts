@@ -1,4 +1,4 @@
-import type { Tour, BookingEnquiry, BlogPost, GalleryItem, ContactMessage, AgencySettings, Vendor, TourReview, DiscountOffer, TrendingVideo, HomePageFaq } from '../types';
+import type { Tour, BookingEnquiry, BlogPost, GalleryItem, ContactMessage, Vendor, TourReview, DiscountOffer, TrendingVideo, HomePageFaq } from '../types';
 
 export const mockTours: Tour[] = [
   {
@@ -878,19 +878,6 @@ export const mockContacts: ContactMessage[] = [
     receivedAt: '2 days ago',
   },
 ];
-
-export const defaultSettings: AgencySettings = {
-  agencyName: 'KrikoTrip Holidays & Luxury Travels',
-  tagline: 'Your Gateway to Extraordinary Journeys',
-  contactEmail: 'superadmin@krikotrip.com',
-  phone: '+91 98300 12345',
-  address: 'Suite 402, Trade Tower, Salt Lake Sector V, Kolkata, WB 700091',
-  currency: 'INR (₹)',
-  timezone: 'IST (UTC+5:30)',
-  bookingAutoConfirm: false,
-  emailNotifications: true,
-  smsAlerts: true,
-};
 
 export const mockVendors: Vendor[] = [
   {

@@ -201,12 +201,22 @@ export interface AgencySettings {
   tagline: string;
   contactEmail: string;
   phone: string;
+  whatsappNumber?: string;
   address: string;
+  mapEmbedUrl?: string;
   currency: string;
   timezone: string;
   bookingAutoConfirm: boolean;
   emailNotifications: boolean;
   smsAlerts: boolean;
+  socialLinks?: Record<string, string>;
+  homeStats?: Array<{
+    id?: string;
+    label: string;
+    value: string;
+    number?: string;
+    icon?: string;
+  }>;
 }
 
 export interface DiscountOffer {

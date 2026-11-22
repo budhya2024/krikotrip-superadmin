@@ -17,6 +17,9 @@ import {
   Upload,
   Loader2,
   Trash2,
+  Bell,
+  Share2,
+  BarChart3,
 } from 'lucide-react';
 import type { AgencySettings } from '../../types';
 import { useTheme } from '../../context/ThemeContext';
@@ -24,11 +27,15 @@ import { useAuth } from '../../auth/use-auth';
 import { authClient } from '../../lib/auth-client';
 import { updateAdminProfile } from '../../api/admin';
 import { uploadAdminImage } from '../../api/media';
+import {
+  useAdminSettingsQuery,
+  useUpdateAdminSettingsMutation,
+} from '../../api/settings';
 import brandLogo from '../../assets/images/brand-logo.png';
 
 interface SettingsViewProps {
-  settings: AgencySettings;
-  onSaveSettings: (settings: AgencySettings) => void;
+  settings?: AgencySettings;
+  onSaveSettings?: (settings: AgencySettings) => void;
 }
 
 type SettingsTab = 'profile-security' | 'appearance' | 'agency';
@@ -37,11 +44,67 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   settings: initialSettings,
   onSaveSettings,
 }) => {
-  const { theme, setTheme, toggleTheme } = useTheme();
+  const { theme, setTheme } = useTheme();
   const { adminUser, refreshSession } = useAuth();
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile-security');
-  const [formData, setFormData] = useState<AgencySettings>(initialSettings);
+
+  const { data: serverSettings, isLoading: isSettingsLoading } = useAdminSettingsQuery();
+  const updateSettingsMutation = useUpdateAdminSettingsMutation();
+
+  const [formData, setFormData] = useState<AgencySettings>(() => ({
+    agencyName: initialSettings?.agencyName || 'KrikoTrip Holidays & Luxury Travels',
+    tagline: initialSettings?.tagline || 'Your Gateway to Extraordinary Journeys',
+    contactEmail: initialSettings?.contactEmail || 'info@krikotrips.com',
+    phone: initialSettings?.phone || '+91 8250338715',
+    whatsappNumber: initialSettings?.whatsappNumber || '+91 8250338715',
+    address: initialSettings?.address || 'BL-A Shop-GLP/5 676 Green Land Park, Sonarpur, Kolkata - 700103',
+    mapEmbedUrl:
+      initialSettings?.mapEmbedUrl ||
+      'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d14748.241355447664!2d88.4239!3d22.4419!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3a02720d440939fb%3A0xb35a396e6255776a!2sSonarpur%2C%20Kolkata%2C%20West%20Bengal%20700103!5e0!3m2!1sen!2sin!4v1700000000000!5m2!1sen!2sin',
+    currency: initialSettings?.currency || 'INR',
+    timezone: initialSettings?.timezone || 'Asia/Kolkata',
+    bookingAutoConfirm: initialSettings?.bookingAutoConfirm ?? false,
+    emailNotifications: initialSettings?.emailNotifications ?? true,
+    smsAlerts: initialSettings?.smsAlerts ?? false,
+    socialLinks: initialSettings?.socialLinks || {
+      facebook: 'https://facebook.com/krikotrip',
+      instagram: 'https://instagram.com/krikotrip',
+      youtube: 'https://youtube.com/@krikotrip',
+      pinterest: 'https://pinterest.com/krikotrip',
+    },
+    homeStats: initialSettings?.homeStats || [
+      { id: 'tours', label: 'Tour Completed', value: '1000+', number: '1000+' },
+      { id: 'experience', label: 'Travel Experience', value: '10+', number: '10+' },
+      { id: 'travelers', label: 'Happy Traveler', value: '1+', number: '1+' },
+      { id: 'retention', label: 'Retention Rate', value: '98%', number: '98%' },
+    ],
+  }));
+
+  const [prevServerSettings, setPrevServerSettings] = useState(serverSettings);
+  if (serverSettings !== prevServerSettings) {
+    setPrevServerSettings(serverSettings);
+    if (serverSettings) {
+      setFormData({
+        agencyName: serverSettings.agencyName,
+        tagline: serverSettings.tagline || '',
+        contactEmail: serverSettings.contactEmail,
+        phone: serverSettings.supportPhone,
+        whatsappNumber: serverSettings.whatsappNumber || '',
+        address: serverSettings.address || '',
+        mapEmbedUrl: serverSettings.mapEmbedUrl || '',
+        currency: serverSettings.currency,
+        timezone: serverSettings.timezone,
+        bookingAutoConfirm: serverSettings.bookingAutoConfirm,
+        emailNotifications: serverSettings.emailNotifications,
+        smsAlerts: serverSettings.smsAlerts,
+        socialLinks: serverSettings.socialLinks || {},
+        homeStats: serverSettings.homeStats || [],
+      });
+    }
+  }
+
   const [agencySavedSuccess, setAgencySavedSuccess] = useState(false);
+  const [agencyError, setAgencyError] = useState('');
 
   const [adminName, setAdminName] = useState(adminUser?.name || '');
   const [adminEmail, setAdminEmail] = useState(adminUser?.email || '');
@@ -175,16 +238,60 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     }
   };
 
-  const handleAgencySubmit = (e: React.FormEvent) => {
+  const handleAgencySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSaveSettings(formData);
-    setAgencySavedSuccess(true);
-    setTimeout(() => setAgencySavedSuccess(false), 3000);
+    setAgencyError('');
+    try {
+      await updateSettingsMutation.mutateAsync({
+        agencyName: formData.agencyName,
+        tagline: formData.tagline || null,
+        contactEmail: formData.contactEmail,
+        supportPhone: formData.phone,
+        whatsappNumber: formData.whatsappNumber || null,
+        address: formData.address || null,
+        mapEmbedUrl: formData.mapEmbedUrl || null,
+        currency: formData.currency,
+        timezone: formData.timezone,
+        bookingAutoConfirm: formData.bookingAutoConfirm,
+        emailNotifications: formData.emailNotifications,
+        smsAlerts: formData.smsAlerts,
+        socialLinks: formData.socialLinks || {},
+        homeStats: formData.homeStats || [],
+      });
+      if (onSaveSettings) {
+        onSaveSettings(formData);
+      }
+      setAgencySavedSuccess(true);
+      setTimeout(() => setAgencySavedSuccess(false), 3000);
+    } catch {
+      setAgencyError('Failed to save agency settings. Please check your connection and try again.');
+    }
+  };
+
+  const updateStatItem = (index: number, field: 'label' | 'value', val: string) => {
+    const list = [...(formData.homeStats || [])];
+    if (list[index]) {
+      list[index] = {
+        ...list[index],
+        [field]: val,
+        ...(field === 'value' ? { number: val } : {}),
+      };
+      setFormData({ ...formData, homeStats: list });
+    }
+  };
+
+  const updateSocialLink = (platform: string, val: string) => {
+    setFormData({
+      ...formData,
+      socialLinks: {
+        ...(formData.socialLinks || {}),
+        [platform]: val,
+      },
+    });
   };
 
   return (
     <div className="max-w-4xl space-y-6">
-      {/* Top Page Header & Segmented Tabs */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-200 dark:border-slate-800">
         <div>
           <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
@@ -195,7 +302,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
           </p>
         </div>
 
-        {/* Tab Switcher Pills */}
         <div
           className={`flex items-center gap-1 p-1 rounded-[4px] border shrink-0 ${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-slate-100 border-slate-200'
             }`}
@@ -208,8 +314,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
           >
-            <User className="w-3.5 h-3.5" />
-            <span>Profile & Password</span>
+            <Shield className="w-3.5 h-3.5" />
+            <span>Profile & Security</span>
           </button>
 
           <button
@@ -238,12 +344,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       </div>
 
-      {/* ========================================================= */}
-      {/* TAB 1: ADMIN PROFILE & PASSWORD CHANGE                   */}
-      {/* ========================================================= */}
       {activeTab === 'profile-security' && (
         <div className="space-y-6">
-          {/* Card 1: Admin Profile Details */}
           <div
             className={`p-5 rounded-[4px] border space-y-5 ${theme === 'dark'
               ? 'bg-slate-900 border-slate-800 text-white'
@@ -254,21 +356,16 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               <div className="flex items-center gap-2.5">
                 <User className="w-5 h-5 text-blue-600" />
                 <div>
-                  <h3 className="font-semibold text-base">Super Administrator Profile</h3>
-                  <p className="text-xs text-slate-500">Master account credentials for KrikoTrip management</p>
+                  <h3 className="font-semibold text-base">Super Admin Profile</h3>
+                  <p className="text-xs text-slate-500">
+                    Your personal information and identity across the administration panel
+                  </p>
                 </div>
               </div>
-              <span className="text-xs font-semibold px-2.5 py-1 rounded-[4px] bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-                Super Administrator
+              <span className="px-2.5 py-1 text-2xs font-bold uppercase rounded-[4px] bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">
+                Super Admin
               </span>
             </div>
-
-            {profileSavedSuccess && (
-              <div className="p-3 rounded-[4px] bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-800 flex items-center gap-2 text-xs font-semibold">
-                <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>Admin profile changes saved successfully!</span>
-              </div>
-            )}
 
             {profileError && (
               <div className="p-3.5 rounded-[4px] bg-rose-50 dark:bg-rose-950/70 text-rose-800 dark:text-rose-200 border border-rose-200 dark:border-rose-800 flex items-center gap-2.5 text-xs font-semibold">
@@ -277,35 +374,43 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </div>
             )}
 
-            <form onSubmit={handleProfileSubmit} className="space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-[4px] bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
-                <div className="flex items-center gap-4">
-                  {adminAvatar ? (
-                    <img
-                      src={adminAvatar}
-                      alt={adminName}
-                      className="w-16 h-16 rounded-full object-cover ring-4 ring-blue-500/20 shrink-0"
-                    />
-                  ) : (
-                    <div className="w-16 h-16 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center text-xl ring-4 ring-blue-500/20 shrink-0">
-                      {adminName ? adminName.charAt(0).toUpperCase() : 'A'}
-                    </div>
-                  )}
-                  <div className="space-y-1">
-                    <span className="text-xs font-semibold text-slate-800 dark:text-slate-200 block">
-                      Profile Avatar Photo
-                    </span>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                      Displayed in the top navigation bar, sidebar, and admin session audit logs.
-                    </p>
-                  </div>
-                </div>
+            {profileSavedSuccess && (
+              <div className="p-3.5 rounded-[4px] bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-800 flex items-center gap-2.5 text-xs font-semibold">
+                <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>Profile details saved successfully!</span>
+              </div>
+            )}
 
-                <div className="flex items-center gap-2">
+            <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5 p-4 rounded-[4px] border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
+              <div className="relative group shrink-0">
+                {adminAvatar ? (
+                  <img
+                    src={adminAvatar}
+                    alt={adminName}
+                    className="w-20 h-20 rounded-full object-cover border-2 border-blue-500 shadow-xs"
+                  />
+                ) : (
+                  <div className="w-20 h-20 rounded-full bg-blue-600 text-white font-bold text-2xl flex items-center justify-center border-2 border-blue-400 shadow-xs">
+                    {(adminName || 'A').charAt(0).toUpperCase()}
+                  </div>
+                )}
+                {isUploadingAvatar && (
+                  <div className="absolute inset-0 bg-black/60 rounded-full flex items-center justify-center">
+                    <Loader2 className="w-6 h-6 text-white animate-spin" />
+                  </div>
+                )}
+              </div>
+
+              <div className="flex-1 text-center sm:text-left space-y-1.5">
+                <h4 className="text-sm font-semibold text-slate-900 dark:text-white">Admin Avatar Photo</h4>
+                <p className="text-xs text-slate-500">
+                  Recommended size: 256x256 px. Supports JPG, PNG, and WebP up to 10MB.
+                </p>
+                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-2">
                   <input
                     ref={avatarInputRef}
                     type="file"
-                    accept="image/png,image/jpeg,image/webp"
+                    accept="image/jpeg,image/png,image/webp"
                     className="hidden"
                     onChange={handleAvatarFile}
                   />
@@ -313,22 +418,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     type="button"
                     disabled={isUploadingAvatar}
                     onClick={() => avatarInputRef.current?.click()}
-                    className="px-3 py-1.5 text-xs font-semibold rounded-[4px] bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-xs"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-[4px] text-xs font-semibold bg-blue-600 text-white hover:bg-blue-700 transition-colors cursor-pointer shadow-xs disabled:opacity-50"
                   >
-                    {isUploadingAvatar ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <Upload className="w-3.5 h-3.5" />
-                    )}
-                    <span>Upload Photo</span>
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>Upload New Photo</span>
                   </button>
-
                   {adminAvatar && (
                     <button
                       type="button"
                       disabled={isUploadingAvatar}
                       onClick={handleRemoveAvatar}
-                      className="px-3 py-1.5 text-xs font-semibold rounded-[4px] border border-rose-300 dark:border-rose-800 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-[4px] text-xs font-semibold bg-rose-50 text-rose-700 hover:bg-rose-100 dark:bg-rose-950/60 dark:text-rose-300 dark:hover:bg-rose-900/60 border border-rose-200 dark:border-rose-800 transition-colors cursor-pointer"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                       <span>Remove</span>
@@ -336,11 +436,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   )}
                 </div>
               </div>
+            </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+            <form onSubmit={handleProfileSubmit} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block font-semibold mb-1 text-slate-700 dark:text-slate-300 text-xs">
-                    Admin Full Name
+                    Full Name *
                   </label>
                   <input
                     type="text"
@@ -348,54 +450,37 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     value={adminName}
                     onChange={(e) => setAdminName(e.target.value)}
                     className={`w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none ${theme === 'dark'
-                      ? 'bg-slate-800 border-slate-700 text-white'
-                      : 'bg-slate-50 border-slate-200 text-slate-900'
+                      ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500'
+                      : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-blue-600'
                       }`}
                   />
                 </div>
 
                 <div>
                   <label className="block font-semibold mb-1 text-slate-700 dark:text-slate-300 text-xs">
-                    Primary Login Email
+                    Email Address
                   </label>
                   <input
                     type="email"
-                    readOnly
+                    disabled
                     value={adminEmail}
-                    className={`w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none opacity-80 cursor-not-allowed ${theme === 'dark'
-                      ? 'bg-slate-800/60 border-slate-700 text-slate-300'
-                      : 'bg-slate-100 border-slate-200 text-slate-600'
-                      }`}
+                    className="w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none bg-slate-100 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800 text-slate-400 cursor-not-allowed"
                   />
+                  <p className="text-3xs text-slate-400 mt-1">Super admin email is locked to primary auth credentials</p>
                 </div>
 
-                <div>
+                <div className="sm:col-span-2">
                   <label className="block font-semibold mb-1 text-slate-700 dark:text-slate-300 text-xs">
-                    Direct Phone Number
+                    Phone Number
                   </label>
                   <input
-                    type="text"
+                    type="tel"
+                    placeholder="+91 98765 43210"
                     value={adminPhone}
                     onChange={(e) => setAdminPhone(e.target.value)}
-                    placeholder="+91 98765 43210"
                     className={`w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none ${theme === 'dark'
-                      ? 'bg-slate-800 border-slate-700 text-white'
-                      : 'bg-slate-50 border-slate-200 text-slate-900'
-                      }`}
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-semibold mb-1 text-slate-700 dark:text-slate-300 text-xs">
-                    Security Access Role
-                  </label>
-                  <input
-                    type="text"
-                    disabled
-                    value="Super Administrator (Full Root Access)"
-                    className={`w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none opacity-70 cursor-not-allowed ${theme === 'dark'
-                      ? 'bg-slate-800/50 border-slate-700 text-slate-400'
-                      : 'bg-slate-100 border-slate-200 text-slate-500'
+                      ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500'
+                      : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-blue-600'
                       }`}
                   />
                 </div>
@@ -413,7 +498,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             </form>
           </div>
 
-          {/* Card 2: Password Change Features */}
           <div
             className={`p-5 rounded-[4px] border space-y-5 ${theme === 'dark'
               ? 'bg-slate-900 border-slate-800 text-white'
@@ -432,11 +516,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </div>
               <div className="flex items-center gap-1.5 text-xs text-slate-400 font-semibold">
                 <KeyRound className="w-4 h-4 text-amber-500" />
-                <span>Encrypted SHA-256</span>
+                <span>Encrypted Security</span>
               </div>
             </div>
 
-            {/* Error Message */}
             {passwordError && (
               <div className="p-3.5 rounded-[4px] bg-rose-50 dark:bg-rose-950/70 text-rose-800 dark:text-rose-200 border border-rose-200 dark:border-rose-800 flex items-center gap-2.5 text-xs font-semibold">
                 <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
@@ -444,16 +527,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </div>
             )}
 
-            {/* Success Message */}
             {passwordSuccess && (
-              <div className="p-3.5 rounded-[4px] bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-800 flex items-center gap-2.5 text-xs font-semibold">
-                <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
+              <div className="p-3.5 rounded-[4px] bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-800 flex items-center gap-2.5 text-xs font-semibold">
+                <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
                 <span>Admin password updated successfully! Future logins will require your new password.</span>
               </div>
             )}
 
             <form onSubmit={handlePasswordSubmit} className="space-y-4">
-              {/* Current Password */}
               <div>
                 <label className="block font-semibold mb-1 text-slate-700 dark:text-slate-300 text-xs">
                   Current Password *
@@ -481,7 +562,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </div>
               </div>
 
-              {/* New Password & Confirm Password */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block font-semibold mb-1 text-slate-700 dark:text-slate-300 text-xs">
@@ -491,7 +571,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     <input
                       type={showNewPass ? 'text' : 'password'}
                       required
-                      placeholder="At least 8 characters"
+                      placeholder="At least 14 characters"
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                       className={`w-full pr-10 pl-3 py-2 text-xs sm:text-sm rounded-[4px] border outline-none ${theme === 'dark'
@@ -518,7 +598,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                     <input
                       type={showConfirmPass ? 'text' : 'password'}
                       required
-                      placeholder="Repeat new password"
+                      placeholder="Re-type new password"
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       className={`w-full pr-10 pl-3 py-2 text-xs sm:text-sm rounded-[4px] border outline-none ${theme === 'dark'
@@ -538,26 +618,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                 </div>
               </div>
 
-              {/* Password Requirements Guide */}
-              <div className="p-3 rounded-[4px] bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 space-y-1 text-[11px] text-slate-500">
-                <div className="font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                  <Shield className="w-3.5 h-3.5 text-blue-600" />
-                  <span>Password Security Guidelines:</span>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 pt-1">
-                  <span className={newPassword.length >= 8 ? 'text-emerald-600 font-semibold' : ''}>
-                    • Minimum 8 characters long {newPassword.length >= 8 ? '✓' : ''}
-                  </span>
-                  <span className={newPassword && confirmPassword && newPassword === confirmPassword ? 'text-emerald-600 font-semibold' : ''}>
-                    • Passwords match {newPassword && confirmPassword && newPassword === confirmPassword ? '✓' : ''}
-                  </span>
-                </div>
-              </div>
-
               <div className="flex justify-end pt-2">
                 <button
                   type="submit"
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-[4px] text-xs sm:text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors cursor-pointer shadow-xs"
+                  className="flex items-center gap-2 px-5 py-2 rounded-[4px] text-xs sm:text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors cursor-pointer shadow-xs"
                 >
                   <KeyRound className="w-4 h-4" />
                   <span>Update Password</span>
@@ -568,132 +632,71 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       )}
 
-      {/* ========================================================= */}
-      {/* TAB 2: APPEARANCE & DARK/LIGHT MODE                      */}
-      {/* ========================================================= */}
       {activeTab === 'appearance' && (
         <div className="space-y-6">
-          {/* Card: Dark / Light Mode Option */}
           <div
-            className={`p-5 rounded-[4px] border space-y-5 ${theme === 'dark'
+            className={`p-5 rounded-[4px] border space-y-4 ${theme === 'dark'
               ? 'bg-slate-900 border-slate-800 text-white'
               : 'bg-white border-slate-200 text-slate-900'
               }`}
           >
-            <div className="flex items-center justify-between pb-3.5 border-b border-slate-200 dark:border-slate-800">
-              <div className="flex items-center gap-2.5">
-                <Sun className="w-5 h-5 text-blue-600" />
-                <div>
-                  <h3 className="font-semibold text-base">Appearance & Interface Theme</h3>
-                  <p className="text-xs text-slate-500">
-                    Switch between Light and Dark interface colors across the entire super admin portal
-                  </p>
-                </div>
+            <div className="flex items-center gap-2.5 pb-3.5 border-b border-slate-200 dark:border-slate-800">
+              <Sun className="w-5 h-5 text-blue-600" />
+              <div>
+                <h3 className="font-semibold text-base">Dashboard Interface Theme</h3>
+                <p className="text-xs text-slate-500">
+                  Select your preferred color mode for daily operational use
+                </p>
               </div>
-
-              {/* Master Sliding Toggle Bar */}
-              <button
-                type="button"
-                role="switch"
-                aria-checked={theme === 'dark'}
-                onClick={toggleTheme}
-                className="flex items-center gap-2.5 p-1.5 px-3  dark:border-slate-700 cursor-pointer  transition-colors"
-                title="Toggle Dark / Light Theme"
-              >
-                <span
-                  className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${theme === 'dark' ? 'bg-blue-600' : 'bg-amber-400'
-                    }`}
-                >
-                  <span
-                    className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-xs transition duration-200 ease-in-out ${theme === 'dark' ? 'translate-x-4' : 'translate-x-0'
-                      }`}
-                  />
-                </span>
-                <span className="text-xs font-semibold">
-                  {theme === 'dark' ? 'Dark Mode' : 'Light Mode'}
-                </span>
-              </button>
             </div>
 
-            {/* Visual Comparison Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* Light Theme Card */}
-              <div
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+              <button
+                type="button"
                 onClick={() => setTheme('light')}
-                className={`p-4 rounded-[4px] border-2 cursor-pointer transition-all ${theme === 'light'
-                  ? 'border-blue-600 bg-blue-50/50 shadow-xs'
-                  : 'border-slate-200 dark:border-slate-800 hover:border-slate-300'
+                className={`p-4 rounded-[4px] border text-left flex items-start gap-3.5 transition-all cursor-pointer ${theme === 'light'
+                  ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-950/30 ring-1 ring-blue-600'
+                  : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
                   }`}
               >
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <Sun className="w-4 h-4 text-amber-500" />
-                    <span className="font-semibold text-sm">Light Theme</span>
-                  </div>
-                  {theme === 'light' ? (
-                    <span className="text-xs font-bold text-blue-600 px-2 py-0.5 rounded-[4px] bg-blue-100">
-                      Active
-                    </span>
-                  ) : (
-                    <span className="text-xs text-slate-400">Click to Select</span>
-                  )}
+                <div className="p-2.5 rounded-[4px] bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 shrink-0">
+                  <Sun className="w-5 h-5" />
                 </div>
-
-                <div className="p-3 rounded-[4px] bg-white border border-slate-200 space-y-2 mb-2">
-                  <div className="flex items-center justify-between">
-                    <span className="w-16 h-2.5 rounded-full bg-slate-200 block" />
-                    <span className="w-6 h-2.5 rounded-full bg-blue-600 block" />
-                  </div>
-                  <div className="w-full h-8 rounded-[4px] bg-slate-50 border border-slate-100 flex items-center px-2">
-                    <span className="w-20 h-2 bg-slate-300 rounded-full" />
-                  </div>
+                <div>
+                  <h4 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                    <span>Light Mode</span>
+                    {theme === 'light' && <CheckCircle className="w-4 h-4 text-blue-600" />}
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Clean, high-contrast crisp theme designed for daylight viewing and office hours.
+                  </p>
                 </div>
+              </button>
 
-                <p className="text-xs text-slate-500">
-                  Clean crisp white and royal blue palette, ideal for daylight hours.
-                </p>
-              </div>
-
-              {/* Dark Theme Card */}
-              <div
+              <button
+                type="button"
                 onClick={() => setTheme('dark')}
-                className={`p-4 rounded-[4px] border-2 cursor-pointer transition-all ${theme === 'dark'
-                  ? 'border-blue-500 bg-slate-800/80 shadow-xs'
-                  : 'border-slate-200 dark:border-slate-800 hover:border-slate-300'
+                className={`p-4 rounded-[4px] border text-left flex items-start gap-3.5 transition-all cursor-pointer ${theme === 'dark'
+                  ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-950/30 ring-1 ring-blue-600'
+                  : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
                   }`}
               >
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <Moon className="w-4 h-4 text-blue-400" />
-                    <span className="font-semibold text-sm">Dark Theme</span>
-                  </div>
-                  {theme === 'dark' ? (
-                    <span className="text-xs font-bold text-blue-400 px-2 py-0.5 rounded-[4px] bg-blue-950 border border-blue-800">
-                      Active
-                    </span>
-                  ) : (
-                    <span className="text-xs text-slate-400">Click to Select</span>
-                  )}
+                <div className="p-2.5 rounded-[4px] bg-slate-800 text-slate-200 dark:bg-slate-700 shrink-0">
+                  <Moon className="w-5 h-5" />
                 </div>
-
-                <div className="p-3 rounded-[4px] bg-slate-900 border border-slate-700 space-y-2 mb-2">
-                  <div className="flex items-center justify-between">
-                    <span className="w-16 h-2.5 rounded-full bg-slate-700 block" />
-                    <span className="w-6 h-2.5 rounded-full bg-blue-500 block" />
-                  </div>
-                  <div className="w-full h-8 rounded-[4px] bg-slate-800 border border-slate-700 flex items-center px-2">
-                    <span className="w-20 h-2 bg-slate-600 rounded-full" />
-                  </div>
+                <div>
+                  <h4 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                    <span>Dark Mode</span>
+                    {theme === 'dark' && <CheckCircle className="w-4 h-4 text-blue-600" />}
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Deep slate low-glare theme designed to reduce eye strain in low-light environments.
+                  </p>
                 </div>
-
-                <p className="text-xs text-slate-400">
-                  Deep midnight slate and glowing blue accents, easy on the eyes in low light.
-                </p>
-              </div>
+              </button>
             </div>
           </div>
 
-          {/* Card: Brand Assets & Favicon */}
           <div
             className={`p-5 rounded-[4px] border space-y-4 ${theme === 'dark'
               ? 'bg-slate-900 border-slate-800 text-white'
@@ -703,49 +706,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
             <div className="flex items-center gap-2.5 pb-3.5 border-b border-slate-200 dark:border-slate-800">
               <ImageIcon className="w-5 h-5 text-blue-600" />
               <div>
-                <h3 className="font-semibold text-base">Brand Graphics & Assets</h3>
-                <p className="text-xs text-slate-500">Official logo and browser tab favicon active across the portal</p>
+                <h3 className="font-semibold text-base">Agency Brand Assets</h3>
+                <p className="text-xs text-slate-500">Official brand mark rendered across portal headers and client invoices</p>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* Primary Logo Card */}
-              <div
-                className={`p-4 rounded-[4px] border ${theme === 'dark' ? 'bg-slate-800/60 border-slate-700' : 'bg-slate-50 border-slate-200'
-                  }`}
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">Main Agency Logo</span>
-                  <span className="text-xs px-2 py-0.5 rounded-[4px] bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 font-medium">
-                    1777 × 524 PNG
-                  </span>
-                </div>
-                <div className="bg-white dark:bg-slate-900 rounded-[4px] p-4 border border-slate-200 dark:border-slate-700 flex items-center justify-center min-h-[90px]">
-                  <img src={brandLogo} alt="KrikoTrip Official Logo" className="max-h-12 w-auto object-contain" />
-                </div>
-                <p className="text-xs text-slate-500 mt-2.5">
-                  Applied in Super Admin navigation sidebar header and public views.
-                </p>
+            <div className="flex items-center gap-6 p-4 rounded-[4px] border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40">
+              <div className="p-3 bg-white dark:bg-slate-900 rounded-[4px] border border-slate-200 dark:border-slate-700 shadow-2xs shrink-0">
+                <img src={brandLogo} alt="KrikoTrip Brand Logo" className="h-10 w-auto object-contain" />
               </div>
-
-              {/* Favicon Card */}
-              <div
-                className={`p-4 rounded-[4px] border ${theme === 'dark' ? 'bg-slate-800/60 border-slate-700' : 'bg-slate-50 border-slate-200'
-                  }`}
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">Browser Favicon</span>
-                  <span className="text-xs px-2 py-0.5 rounded-[4px] bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300 font-medium">
-                    48 × 48 ICO
-                  </span>
-                </div>
-                <div className="bg-white dark:bg-slate-900 rounded-[4px] p-4 border border-slate-200 dark:border-slate-700 flex items-center justify-center min-h-[90px]">
-                  <div className="w-12 h-12 rounded-[4px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center p-2">
-                    <img src="/favicon.ico" alt="KrikoTrip Favicon" className="w-8 h-8 object-contain" />
-                  </div>
-                </div>
-                <p className="text-xs text-slate-500 mt-2.5">
-                  Applied in browser tab, bookmarks, mobile header, and collapsed sidebar.
+              <div>
+                <h4 className="text-sm font-semibold text-slate-900 dark:text-white">Active Brand Logo</h4>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  High-definition transparent vector PNG used as the primary emblem for KrikoTrip.
                 </p>
               </div>
             </div>
@@ -753,178 +726,447 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
       )}
 
-      {/* ========================================================= */}
-      {/* TAB 3: AGENCY PROFILE & REGIONAL SETTINGS                */}
-      {/* ========================================================= */}
       {activeTab === 'agency' && (
         <form onSubmit={handleAgencySubmit} className="space-y-6">
-          {agencySavedSuccess && (
-            <div className="p-3.5 rounded-[4px] bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-800 flex items-center gap-2.5 text-xs font-semibold">
-              <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span>Agency profile and currency settings updated successfully!</span>
+          {agencyError && (
+            <div className="p-3.5 rounded-[4px] bg-rose-50 dark:bg-rose-950/70 text-rose-800 dark:text-rose-200 border border-rose-200 dark:border-rose-800 flex items-center gap-2.5 text-xs font-semibold">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>{agencyError}</span>
             </div>
           )}
 
-          {/* Agency Information Card */}
-          <div
-            className={`p-5 rounded-[4px] border space-y-4 ${theme === 'dark'
-              ? 'bg-slate-900 border-slate-800 text-white'
-              : 'bg-white border-slate-200 text-slate-900'
-              }`}
-          >
-            <div className="flex items-center gap-2.5 pb-3.5 border-b border-slate-200 dark:border-slate-800">
-              <Building className="w-5 h-5 text-blue-600" />
-              <div>
-                <h3 className="font-semibold text-base">Travel Agency Profile</h3>
-                <p className="text-xs text-slate-500">Company information for vouchers, invoices, and guest communications</p>
-              </div>
+          {agencySavedSuccess && (
+            <div className="p-3.5 rounded-[4px] bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-800 flex items-center gap-2.5 text-xs font-semibold">
+              <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>Agency profile, regional settings, and home statistics updated successfully!</span>
             </div>
+          )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-              <div>
-                <label className="block font-semibold mb-1 text-slate-700 dark:text-slate-300 text-xs">
-                  Agency Brand Name
-                </label>
-                <input
-                  type="text"
-                  value={formData.agencyName}
-                  onChange={(e) => setFormData({ ...formData, agencyName: e.target.value })}
-                  className={`w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none ${theme === 'dark'
-                    ? 'bg-slate-800 border-slate-700 text-white'
-                    : 'bg-slate-50 border-slate-200 text-slate-900'
-                    }`}
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold mb-1 text-slate-700 dark:text-slate-300 text-xs">
-                  Tagline
-                </label>
-                <input
-                  type="text"
-                  value={formData.tagline}
-                  onChange={(e) => setFormData({ ...formData, tagline: e.target.value })}
-                  className={`w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none ${theme === 'dark'
-                    ? 'bg-slate-800 border-slate-700 text-white'
-                    : 'bg-slate-50 border-slate-200 text-slate-900'
-                    }`}
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold mb-1 text-slate-700 dark:text-slate-300 text-xs">
-                  Support Email
-                </label>
-                <input
-                  type="email"
-                  value={formData.contactEmail}
-                  onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })}
-                  className={`w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none ${theme === 'dark'
-                    ? 'bg-slate-800 border-slate-700 text-white'
-                    : 'bg-slate-50 border-slate-200 text-slate-900'
-                    }`}
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold mb-1 text-slate-700 dark:text-slate-300 text-xs">
-                  Official Phone
-                </label>
-                <input
-                  type="text"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className={`w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none ${theme === 'dark'
-                    ? 'bg-slate-800 border-slate-700 text-white'
-                    : 'bg-slate-50 border-slate-200 text-slate-900'
-                    }`}
-                />
-              </div>
+          {isSettingsLoading ? (
+            <div className="flex items-center justify-center p-12">
+              <Loader2 className="w-7 h-7 text-blue-600 animate-spin" />
             </div>
-
-            <div>
-              <label className="block font-semibold mb-1 text-xs text-slate-700 dark:text-slate-300">
-                Headquarters Address
-              </label>
-              <input
-                type="text"
-                value={formData.address}
-                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                className={`w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none ${theme === 'dark'
-                  ? 'bg-slate-800 border-slate-700 text-white'
-                  : 'bg-slate-50 border-slate-200 text-slate-900'
+          ) : (
+            <>
+              <div
+                className={`p-5 rounded-[4px] border space-y-4 ${theme === 'dark'
+                  ? 'bg-slate-900 border-slate-800 text-white'
+                  : 'bg-white border-slate-200 text-slate-900'
                   }`}
-              />
-            </div>
-          </div>
+              >
+                <div className="flex items-center gap-2.5 pb-3.5 border-b border-slate-200 dark:border-slate-800">
+                  <Building className="w-5 h-5 text-blue-600" />
+                  <div>
+                    <h3 className="font-semibold text-base">Travel Agency Profile</h3>
+                    <p className="text-xs text-slate-500">Company information for vouchers, invoices, and guest communications</p>
+                  </div>
+                </div>
 
-          {/* Currency & Regional */}
-          <div
-            className={`p-5 rounded-[4px] border space-y-4 ${theme === 'dark'
-              ? 'bg-slate-900 border-slate-800 text-white'
-              : 'bg-white border-slate-200 text-slate-900'
-              }`}
-          >
-            <div className="flex items-center gap-2.5 pb-3.5 border-b border-slate-200 dark:border-slate-800">
-              <Globe className="w-5 h-5 text-blue-600" />
-              <div>
-                <h3 className="font-semibold text-base">Currency & Timezone</h3>
-                <p className="text-xs text-slate-500">Default financial currency and agency operating hours</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <label className="block font-semibold mb-1 text-slate-700 dark:text-slate-300 text-xs">
+                      Agency Brand Name *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.agencyName}
+                      onChange={(e) => setFormData({ ...formData, agencyName: e.target.value })}
+                      className={`w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none ${theme === 'dark'
+                        ? 'bg-slate-800 border-slate-700 text-white'
+                        : 'bg-slate-50 border-slate-200 text-slate-900'
+                        }`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold mb-1 text-slate-700 dark:text-slate-300 text-xs">
+                      Tagline
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.tagline}
+                      onChange={(e) => setFormData({ ...formData, tagline: e.target.value })}
+                      className={`w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none ${theme === 'dark'
+                        ? 'bg-slate-800 border-slate-700 text-white'
+                        : 'bg-slate-50 border-slate-200 text-slate-900'
+                        }`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold mb-1 text-slate-700 dark:text-slate-300 text-xs">
+                      Support Email *
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      value={formData.contactEmail}
+                      onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })}
+                      className={`w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none ${theme === 'dark'
+                        ? 'bg-slate-800 border-slate-700 text-white'
+                        : 'bg-slate-50 border-slate-200 text-slate-900'
+                        }`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold mb-1 text-slate-700 dark:text-slate-300 text-xs">
+                      Official Phone *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.phone}
+                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      className={`w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none ${theme === 'dark'
+                        ? 'bg-slate-800 border-slate-700 text-white'
+                        : 'bg-slate-50 border-slate-200 text-slate-900'
+                        }`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold mb-1 text-slate-700 dark:text-slate-300 text-xs">
+                      WhatsApp Number
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="+91 8250338715"
+                      value={formData.whatsappNumber || ''}
+                      onChange={(e) => setFormData({ ...formData, whatsappNumber: e.target.value })}
+                      className={`w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none ${theme === 'dark'
+                        ? 'bg-slate-800 border-slate-700 text-white'
+                        : 'bg-slate-50 border-slate-200 text-slate-900'
+                        }`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold mb-1 text-slate-700 dark:text-slate-300 text-xs">
+                      Google Maps Embed URL
+                    </label>
+                    <input
+                      type="url"
+                      placeholder="https://www.google.com/maps/embed?pb=..."
+                      value={formData.mapEmbedUrl || ''}
+                      onChange={(e) => setFormData({ ...formData, mapEmbedUrl: e.target.value })}
+                      className={`w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none ${theme === 'dark'
+                        ? 'bg-slate-800 border-slate-700 text-white'
+                        : 'bg-slate-50 border-slate-200 text-slate-900'
+                        }`}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block font-semibold mb-1 text-xs text-slate-700 dark:text-slate-300">
+                    Headquarters Address
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.address}
+                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                    className={`w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none ${theme === 'dark'
+                      ? 'bg-slate-800 border-slate-700 text-white'
+                      : 'bg-slate-50 border-slate-200 text-slate-900'
+                      }`}
+                  />
+                </div>
               </div>
-            </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-              <div>
-                <label className="block font-semibold mb-1 text-slate-700 dark:text-slate-300 text-xs">
-                  Primary Currency
-                </label>
-                <select
-                  value={formData.currency}
-                  onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
-                  className={`w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none ${theme === 'dark'
-                    ? 'bg-slate-800 border-slate-700 text-white'
-                    : 'bg-slate-50 border-slate-200 text-slate-900'
-                    }`}
+              <div
+                className={`p-5 rounded-[4px] border space-y-4 ${theme === 'dark'
+                  ? 'bg-slate-900 border-slate-800 text-white'
+                  : 'bg-white border-slate-200 text-slate-900'
+                  }`}
+              >
+                <div className="flex items-center gap-2.5 pb-3.5 border-b border-slate-200 dark:border-slate-800">
+                  <Globe className="w-5 h-5 text-blue-600" />
+                  <div>
+                    <h3 className="font-semibold text-base">Currency & Timezone</h3>
+                    <p className="text-xs text-slate-500">Default financial currency and agency operating hours</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <label className="block font-semibold mb-1 text-slate-700 dark:text-slate-300 text-xs">
+                      Primary Currency
+                    </label>
+                    <select
+                      value={formData.currency}
+                      onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
+                      className={`w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none ${theme === 'dark'
+                        ? 'bg-slate-800 border-slate-700 text-white'
+                        : 'bg-slate-50 border-slate-200 text-slate-900'
+                        }`}
+                    >
+                      <option value="INR">INR (₹) - Indian Rupee</option>
+                      <option value="USD">USD ($) - US Dollar</option>
+                      <option value="EUR">EUR (€) - Euro</option>
+                      <option value="GBP">GBP (£) - British Pound</option>
+                      <option value="AED">AED (د.إ) - UAE Dirham</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold mb-1 text-slate-700 dark:text-slate-300 text-xs">
+                      Timezone (IANA)
+                    </label>
+                    <select
+                      value={formData.timezone}
+                      onChange={(e) => setFormData({ ...formData, timezone: e.target.value })}
+                      className={`w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none ${theme === 'dark'
+                        ? 'bg-slate-800 border-slate-700 text-white'
+                        : 'bg-slate-50 border-slate-200 text-slate-900'
+                        }`}
+                    >
+                      <option value="Asia/Kolkata">Asia/Kolkata (IST, UTC+05:30)</option>
+                      <option value="Asia/Dubai">Asia/Dubai (GST, UTC+04:00)</option>
+                      <option value="Asia/Bangkok">Asia/Bangkok (ICT, UTC+07:00)</option>
+                      <option value="Asia/Singapore">Asia/Singapore (SGT, UTC+08:00)</option>
+                      <option value="Europe/London">Europe/London (GMT/BST, UTC+00:00)</option>
+                      <option value="Europe/Paris">Europe/Paris (CET/CEST, UTC+01:00)</option>
+                      <option value="America/New_York">America/New_York (EST/EDT, UTC-05:00)</option>
+                      <option value="UTC">UTC (Coordinated Universal Time)</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div
+                className={`p-5 rounded-[4px] border space-y-4 ${theme === 'dark'
+                  ? 'bg-slate-900 border-slate-800 text-white'
+                  : 'bg-white border-slate-200 text-slate-900'
+                  }`}
+              >
+                <div className="flex items-center gap-2.5 pb-3.5 border-b border-slate-200 dark:border-slate-800">
+                  <Bell className="w-5 h-5 text-blue-600" />
+                  <div>
+                    <h3 className="font-semibold text-base">Automation & Notification Preferences</h3>
+                    <p className="text-xs text-slate-500">Control automated booking confirmations and alert channels</p>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <label className="flex items-start gap-3 p-3 rounded-[4px] border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.bookingAutoConfirm}
+                      onChange={(e) => setFormData({ ...formData, bookingAutoConfirm: e.target.checked })}
+                      className="w-4 h-4 mt-0.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <div>
+                      <span className="text-xs sm:text-sm font-semibold text-slate-900 dark:text-white block">
+                        Automatic Booking Confirmation
+                      </span>
+                      <span className="text-xs text-slate-500 block">
+                        Automatically confirm guest booking enquiries when packages carry fixed pricing and immediate availability.
+                      </span>
+                    </div>
+                  </label>
+
+                  <label className="flex items-start gap-3 p-3 rounded-[4px] border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.emailNotifications}
+                      onChange={(e) => setFormData({ ...formData, emailNotifications: e.target.checked })}
+                      className="w-4 h-4 mt-0.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <div>
+                      <span className="text-xs sm:text-sm font-semibold text-slate-900 dark:text-white block">
+                        Admin Email Notifications
+                      </span>
+                      <span className="text-xs text-slate-500 block">
+                        Enqueue automated email alerts to the support email address whenever a new guest enquiry or message arrives.
+                      </span>
+                    </div>
+                  </label>
+
+                  <div className="flex items-start justify-between gap-3 p-3 rounded-[4px] border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/20 opacity-70">
+                    <div className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        disabled
+                        checked={false}
+                        className="w-4 h-4 mt-0.5 rounded border-slate-300 text-slate-400 cursor-not-allowed"
+                      />
+                      <div>
+                        <span className="text-xs sm:text-sm font-semibold text-slate-900 dark:text-white block">
+                          SMS Instant Alerts
+                        </span>
+                        <span className="text-xs text-slate-500 block">
+                          Send mobile SMS alerts via transactional gateway for critical booking actions.
+                        </span>
+                      </div>
+                    </div>
+                    <span className="px-2 py-0.5 text-3xs font-bold uppercase rounded-[4px] bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 shrink-0">
+                      Coming Soon
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div
+                className={`p-5 rounded-[4px] border space-y-4 ${theme === 'dark'
+                  ? 'bg-slate-900 border-slate-800 text-white'
+                  : 'bg-white border-slate-200 text-slate-900'
+                  }`}
+              >
+                <div className="flex items-center gap-2.5 pb-3.5 border-b border-slate-200 dark:border-slate-800">
+                  <Share2 className="w-5 h-5 text-blue-600" />
+                  <div>
+                    <h3 className="font-semibold text-base">Social Media Profiles</h3>
+                    <p className="text-xs text-slate-500">Public social account URLs linked across the site footer and customer touchpoints</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <label className="block font-semibold mb-1 text-slate-700 dark:text-slate-300 text-xs">
+                      Facebook URL
+                    </label>
+                    <input
+                      type="url"
+                      placeholder="https://facebook.com/krikotrip"
+                      value={formData.socialLinks?.facebook || ''}
+                      onChange={(e) => updateSocialLink('facebook', e.target.value)}
+                      className={`w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none ${theme === 'dark'
+                        ? 'bg-slate-800 border-slate-700 text-white'
+                        : 'bg-slate-50 border-slate-200 text-slate-900'
+                        }`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold mb-1 text-slate-700 dark:text-slate-300 text-xs">
+                      Instagram URL
+                    </label>
+                    <input
+                      type="url"
+                      placeholder="https://instagram.com/krikotrip"
+                      value={formData.socialLinks?.instagram || ''}
+                      onChange={(e) => updateSocialLink('instagram', e.target.value)}
+                      className={`w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none ${theme === 'dark'
+                        ? 'bg-slate-800 border-slate-700 text-white'
+                        : 'bg-slate-50 border-slate-200 text-slate-900'
+                        }`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold mb-1 text-slate-700 dark:text-slate-300 text-xs">
+                      YouTube Channel URL
+                    </label>
+                    <input
+                      type="url"
+                      placeholder="https://youtube.com/@krikotrip"
+                      value={formData.socialLinks?.youtube || ''}
+                      onChange={(e) => updateSocialLink('youtube', e.target.value)}
+                      className={`w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none ${theme === 'dark'
+                        ? 'bg-slate-800 border-slate-700 text-white'
+                        : 'bg-slate-50 border-slate-200 text-slate-900'
+                        }`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-semibold mb-1 text-slate-700 dark:text-slate-300 text-xs">
+                      Pinterest URL
+                    </label>
+                    <input
+                      type="url"
+                      placeholder="https://pinterest.com/krikotrip"
+                      value={formData.socialLinks?.pinterest || ''}
+                      onChange={(e) => updateSocialLink('pinterest', e.target.value)}
+                      className={`w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none ${theme === 'dark'
+                        ? 'bg-slate-800 border-slate-700 text-white'
+                        : 'bg-slate-50 border-slate-200 text-slate-900'
+                        }`}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div
+                className={`p-5 rounded-[4px] border space-y-4 ${theme === 'dark'
+                  ? 'bg-slate-900 border-slate-800 text-white'
+                  : 'bg-white border-slate-200 text-slate-900'
+                  }`}
+              >
+                <div className="flex items-center gap-2.5 pb-3.5 border-b border-slate-200 dark:border-slate-800">
+                  <BarChart3 className="w-5 h-5 text-blue-600" />
+                  <div>
+                    <h3 className="font-semibold text-base">Homepage Statistics Bar</h3>
+                    <p className="text-xs text-slate-500">4 trust metrics displayed prominently below the homepage search banner</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {(formData.homeStats || []).map((stat, idx) => (
+                    <div
+                      key={stat.id || idx}
+                      className="p-3.5 rounded-[4px] border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 space-y-2.5"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-blue-600 uppercase">
+                          Metric #{idx + 1} ({stat.id || 'stat'})
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <label className="block font-semibold mb-1 text-slate-600 dark:text-slate-400">
+                            Display Value
+                          </label>
+                          <input
+                            type="text"
+                            value={stat.value || stat.number || ''}
+                            onChange={(e) => updateStatItem(idx, 'value', e.target.value)}
+                            placeholder="e.g. 1000+"
+                            className={`w-full p-2 text-xs rounded-[4px] border outline-none ${theme === 'dark'
+                              ? 'bg-slate-800 border-slate-700 text-white'
+                              : 'bg-white border-slate-200 text-slate-900'
+                              }`}
+                          />
+                        </div>
+                        <div>
+                          <label className="block font-semibold mb-1 text-slate-600 dark:text-slate-400">
+                            Label Title
+                          </label>
+                          <input
+                            type="text"
+                            value={stat.label}
+                            onChange={(e) => updateStatItem(idx, 'label', e.target.value)}
+                            placeholder="e.g. Tour Completed"
+                            className={`w-full p-2 text-xs rounded-[4px] border outline-none ${theme === 'dark'
+                              ? 'bg-slate-800 border-slate-700 text-white'
+                              : 'bg-white border-slate-200 text-slate-900'
+                              }`}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  type="submit"
+                  disabled={updateSettingsMutation.isPending}
+                  className="flex items-center gap-2 px-6 py-2.5 rounded-[4px] text-xs sm:text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors cursor-pointer shadow-xs disabled:opacity-50"
                 >
-                  <option value="INR (₹)">INR (₹) - Indian Rupee</option>
-                  <option value="USD ($)">USD ($)</option>
-                  <option value="EUR (€)">EUR (€)</option>
-                  <option value="GBP (£)">GBP (£)</option>
-                  <option value="AED (د.إ)">AED (د.إ)</option>
-                </select>
+                  {updateSettingsMutation.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Save className="w-4 h-4" />
+                  )}
+                  <span>{updateSettingsMutation.isPending ? 'Saving...' : 'Save Agency Settings'}</span>
+                </button>
               </div>
-
-              <div>
-                <label className="block font-semibold mb-1 text-slate-700 dark:text-slate-300 text-xs">
-                  Timezone
-                </label>
-                <select
-                  value={formData.timezone}
-                  onChange={(e) => setFormData({ ...formData, timezone: e.target.value })}
-                  className={`w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none ${theme === 'dark'
-                    ? 'bg-slate-800 border-slate-700 text-white'
-                    : 'bg-slate-50 border-slate-200 text-slate-900'
-                    }`}
-                >
-                  <option value="UTC+5:30 (India Standard)">UTC+5:30 (India Standard)</option>
-                  <option value="UTC-5 (Eastern Time)">UTC-5 (Eastern Time)</option>
-                  <option value="UTC+0 (London, GMT)">UTC+0 (London, GMT)</option>
-                  <option value="UTC+1 (Central European)">UTC+1 (Central European)</option>
-                  <option value="UTC+4 (Dubai)">UTC+4 (Dubai)</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex justify-end">
-            <button
-              type="submit"
-              className="flex items-center gap-2 px-6 py-2.5 rounded-[4px] text-xs sm:text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors cursor-pointer shadow-xs"
-            >
-              <Save className="w-4 h-4" />
-              <span>Save Agency Settings</span>
-            </button>
-          </div>
+            </>
+          )}
         </form>
       )}
     </div>
