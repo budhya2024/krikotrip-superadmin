@@ -7,7 +7,6 @@ import type {
   Tour,
   BookingEnquiry,
   BlogPost,
-  GalleryItem,
   ContactMessage,
   Vendor,
   TourReview,
@@ -16,7 +15,6 @@ import {
   mockTours,
   mockEnquiries,
   mockBlogs,
-  mockGallery,
   mockContacts,
   mockVendors,
   mockReviews,
@@ -78,7 +76,6 @@ export const AdminLayout: React.FC = () => {
   const [enquiries, setEnquiries] = useState<BookingEnquiry[]>(mockEnquiries);
   const [vendors, setVendors] = useState<Vendor[]>(mockVendors);
   const [blogs, setBlogs] = useState<BlogPost[]>(mockBlogs);
-  const [gallery, setGallery] = useState<GalleryItem[]>(mockGallery);
   const [contacts, setContacts] = useState<ContactMessage[]>(mockContacts);
   const [reviews, setReviews] = useState<TourReview[]>(mockReviews);
 
@@ -215,19 +212,6 @@ export const AdminLayout: React.FC = () => {
     setBlogs(blogs.filter((b) => b.id !== id));
   };
 
-  const handleAddGalleryItem = (itemData: Omit<GalleryItem, 'id' | 'uploadDate'>) => {
-    const newItem: GalleryItem = {
-      ...itemData,
-      id: `GAL-${gallery.length + 1}`,
-      uploadDate: 'Just now',
-    };
-    setGallery([newItem, ...gallery]);
-  };
-
-  const handleDeleteGalleryItem = (id: string) => {
-    setGallery(gallery.filter((g) => g.id !== id));
-  };
-
   const handleToggleContactReplied = (id: string) => {
     setContacts(
       contacts.map((c) => (c.id === id ? { ...c, status: c.status === 'Unread' ? 'Replied' : 'Unread' } : c))
@@ -346,13 +330,7 @@ export const AdminLayout: React.FC = () => {
           />
         );
       case 'gallery':
-        return (
-          <GalleryView
-            gallery={gallery}
-            onAddImage={handleAddGalleryItem}
-            onDeleteImage={handleDeleteGalleryItem}
-          />
-        );
+        return <GalleryView />;
       case 'contact':
         return (
           <ContactView

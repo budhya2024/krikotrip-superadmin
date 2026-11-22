@@ -46,7 +46,9 @@ export const queryKeys = {
   },
   gallery: {
     all: ['gallery'] as const,
-    list: (category?: string) => ['gallery', 'list', category] as const,
+    categories: ['gallery', 'categories'] as const,
+    list: (filters?: Record<string, unknown>) => ['gallery', 'list', filters] as const,
+    detail: (id: string) => ['gallery', 'detail', id] as const,
   },
   offers: {
     all: ['offers'] as const,
