@@ -9379,6 +9379,824 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/enquiries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit a new tour package enquiry or booking */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        packageSlug: string;
+                        /** @default 1 */
+                        travellers: number;
+                        travelDate?: string | null;
+                        customerName: string;
+                        customerEmail?: string | null;
+                        /** @default +91 */
+                        phoneCountryCode: string;
+                        phone: string;
+                        message?: string | null;
+                        pagePath?: string | null;
+                        couponCode?: string | null;
+                        /** @default false */
+                        redeemLoyaltyPoints: boolean;
+                    };
+                };
+            };
+            responses: {
+                /** @description Enquiry created successfully */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            data: {
+                                /** Format: uuid */
+                                id: string;
+                                reference: string;
+                                /** @enum {string} */
+                                status: "new" | "pending" | "in_progress" | "confirmed" | "completed" | "cancelled";
+                                unitPricePaise: number | null;
+                                estimatePaise: number | null;
+                                couponDiscountPaise: number;
+                                loyaltyPointsReserved: number;
+                                loyaltyDiscountPaise: number;
+                                finalPricePaise: number | null;
+                                message: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Validation error or invalid coupon/package */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                code: string;
+                                message: string;
+                                details?: unknown;
+                                requestId?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Package not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                code: string;
+                                message: string;
+                                details?: unknown;
+                                requestId?: string;
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/callback-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit a fast callback request */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        customerName: string;
+                        /** @default +91 */
+                        phoneCountryCode: string;
+                        phone: string;
+                        pagePath?: string | null;
+                        packageSlug?: string | null;
+                        message?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Callback request received */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            data: {
+                                /** Format: uuid */
+                                id: string;
+                                reference: string;
+                                message: string;
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/bookings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List bookings and tour history for signed-in customer */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Customer bookings list */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            data: {
+                                /** Format: uuid */
+                                id: string;
+                                bookingId: string;
+                                reference: string;
+                                packageTitle: string;
+                                destination: string;
+                                duration: string;
+                                dates: string;
+                                /** @enum {string} */
+                                status: "Confirmed" | "Completed" | "Cancelled" | "Pending" | "In Progress" | "New";
+                                /** @enum {string} */
+                                rawStatus: "new" | "pending" | "in_progress" | "confirmed" | "completed" | "cancelled";
+                                amount: number;
+                                finalPricePaise: number | null;
+                                estimatePaise: number | null;
+                                pointsEarned: number;
+                                image: string;
+                                travellers?: string;
+                                hotelCategory?: string;
+                                mealPlan?: string;
+                                pickupPoint?: string;
+                                inclusions?: string[];
+                                paymentMode?: string;
+                                /** @enum {string} */
+                                paymentStatus: "unpaid" | "partially_paid" | "paid" | "refunded";
+                                appliedCoupon?: {
+                                    code: string;
+                                    discountAmount: number;
+                                };
+                                loyaltyRedeemed?: {
+                                    points: number;
+                                    discountAmount: number;
+                                };
+                                createdAt: string;
+                            }[];
+                            meta: {
+                                page: number;
+                                limit: number;
+                                total: number;
+                                totalPages: number;
+                            };
+                        };
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                code: string;
+                                message: string;
+                                details?: unknown;
+                                requestId?: string;
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/bookings/{reference}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get details of a specific customer booking */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Booking detail */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            data: {
+                                /** Format: uuid */
+                                id: string;
+                                bookingId: string;
+                                reference: string;
+                                packageTitle: string;
+                                destination: string;
+                                duration: string;
+                                dates: string;
+                                /** @enum {string} */
+                                status: "Confirmed" | "Completed" | "Cancelled" | "Pending" | "In Progress" | "New";
+                                /** @enum {string} */
+                                rawStatus: "new" | "pending" | "in_progress" | "confirmed" | "completed" | "cancelled";
+                                amount: number;
+                                finalPricePaise: number | null;
+                                estimatePaise: number | null;
+                                pointsEarned: number;
+                                image: string;
+                                travellers?: string;
+                                hotelCategory?: string;
+                                mealPlan?: string;
+                                pickupPoint?: string;
+                                inclusions?: string[];
+                                paymentMode?: string;
+                                /** @enum {string} */
+                                paymentStatus: "unpaid" | "partially_paid" | "paid" | "refunded";
+                                appliedCoupon?: {
+                                    code: string;
+                                    discountAmount: number;
+                                };
+                                loyaltyRedeemed?: {
+                                    points: number;
+                                    discountAmount: number;
+                                };
+                                createdAt: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Booking not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                code: string;
+                                message: string;
+                                details?: unknown;
+                                requestId?: string;
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/enquiries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List enquiries and bookings with status facets and filters */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Enquiries list with facets */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            data: {
+                                /** Format: uuid */
+                                id: string;
+                                reference: string;
+                                /** @enum {string} */
+                                source: "package_booking" | "callback_request" | "hero_search" | "admin" | "chatbot";
+                                packageId: string | null;
+                                packageTitle: string | null;
+                                destinationId: string | null;
+                                destinationName: string | null;
+                                customerUserId: string | null;
+                                customerName: string;
+                                customerEmail: string | null;
+                                phoneCountryCode: string;
+                                phone: string;
+                                travelDate: string | null;
+                                travellers: number;
+                                /** @enum {string} */
+                                status: "new" | "pending" | "in_progress" | "confirmed" | "completed" | "cancelled";
+                                /** @enum {string} */
+                                paymentStatus: "unpaid" | "partially_paid" | "paid" | "refunded";
+                                unitPricePaise: number | null;
+                                estimatePaise: number | null;
+                                couponDiscountPaise: number;
+                                loyaltyPointsReserved: number;
+                                loyaltyDiscountPaise: number;
+                                baseCostPaise: number | null;
+                                markupPercent: number | null;
+                                taxPercent: number | null;
+                                discountPaise: number;
+                                finalPricePaise: number | null;
+                                vendorPayoutPaise: number | null;
+                                agencyMarginPaise: number | null;
+                                amountPaidPaise: number;
+                                paymentMode: string | null;
+                                hotelCategory: string | null;
+                                mealPlan: string | null;
+                                pickupPoint: string | null;
+                                assignedVendorId: string | null;
+                                vendorLeadStatus: string;
+                                confirmedAt: string | null;
+                                completedAt: string | null;
+                                cancelledAt: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                            }[];
+                            meta: {
+                                page: number;
+                                limit: number;
+                                total: number;
+                                totalPages: number;
+                            };
+                            facets: {
+                                byStatus: {
+                                    [key: string]: number;
+                                };
+                                total: number;
+                            };
+                        };
+                    };
+                };
+                /** @description Unauthorized */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                code: string;
+                                message: string;
+                                details?: unknown;
+                                requestId?: string;
+                            };
+                        };
+                    };
+                };
+                /** @description Forbidden */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                code: string;
+                                message: string;
+                                details?: unknown;
+                                requestId?: string;
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/enquiries/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get full enquiry details with transitions and history */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Enquiry details */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            data: {
+                                /** Format: uuid */
+                                id: string;
+                                reference: string;
+                                /** @enum {string} */
+                                source: "package_booking" | "callback_request" | "hero_search" | "admin" | "chatbot";
+                                packageId: string | null;
+                                packageTitle: string | null;
+                                destinationId: string | null;
+                                destinationName: string | null;
+                                customerUserId: string | null;
+                                customerName: string;
+                                customerEmail: string | null;
+                                phoneCountryCode: string;
+                                phone: string;
+                                travelDate: string | null;
+                                travellers: number;
+                                /** @enum {string} */
+                                status: "new" | "pending" | "in_progress" | "confirmed" | "completed" | "cancelled";
+                                /** @enum {string} */
+                                paymentStatus: "unpaid" | "partially_paid" | "paid" | "refunded";
+                                unitPricePaise: number | null;
+                                estimatePaise: number | null;
+                                couponDiscountPaise: number;
+                                loyaltyPointsReserved: number;
+                                loyaltyDiscountPaise: number;
+                                baseCostPaise: number | null;
+                                markupPercent: number | null;
+                                taxPercent: number | null;
+                                discountPaise: number;
+                                finalPricePaise: number | null;
+                                vendorPayoutPaise: number | null;
+                                agencyMarginPaise: number | null;
+                                amountPaidPaise: number;
+                                paymentMode: string | null;
+                                hotelCategory: string | null;
+                                mealPlan: string | null;
+                                pickupPoint: string | null;
+                                assignedVendorId: string | null;
+                                vendorLeadStatus: string;
+                                confirmedAt: string | null;
+                                completedAt: string | null;
+                                cancelledAt: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                                message: string | null;
+                                pagePath: string | null;
+                                adminNotes: string | null;
+                                cancelReason: string | null;
+                                inclusionsSnapshot: string[] | null;
+                                allowedTransitions: ("new" | "pending" | "in_progress" | "confirmed" | "completed" | "cancelled")[];
+                                couponRedemption: {
+                                    code: string;
+                                    discountPaise: number;
+                                    status: string;
+                                } | null;
+                                statusHistory: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    fromStatus: ("new" | "pending" | "in_progress" | "confirmed" | "completed" | "cancelled") | null;
+                                    /** @enum {string} */
+                                    toStatus: "new" | "pending" | "in_progress" | "confirmed" | "completed" | "cancelled";
+                                    actorType: string;
+                                    actorUserId: string | null;
+                                    note: string | null;
+                                    createdAt: string;
+                                }[];
+                            };
+                        };
+                    };
+                };
+                /** @description Enquiry not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: {
+                                code: string;
+                                message: string;
+                                details?: unknown;
+                                requestId?: string;
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/enquiries/{id}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Transition enquiry status with side effects */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        status: "new" | "pending" | "in_progress" | "confirmed" | "completed" | "cancelled";
+                        note?: string | null;
+                        cancelReason?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Updated enquiry detail */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            data: {
+                                /** Format: uuid */
+                                id: string;
+                                reference: string;
+                                /** @enum {string} */
+                                source: "package_booking" | "callback_request" | "hero_search" | "admin" | "chatbot";
+                                packageId: string | null;
+                                packageTitle: string | null;
+                                destinationId: string | null;
+                                destinationName: string | null;
+                                customerUserId: string | null;
+                                customerName: string;
+                                customerEmail: string | null;
+                                phoneCountryCode: string;
+                                phone: string;
+                                travelDate: string | null;
+                                travellers: number;
+                                /** @enum {string} */
+                                status: "new" | "pending" | "in_progress" | "confirmed" | "completed" | "cancelled";
+                                /** @enum {string} */
+                                paymentStatus: "unpaid" | "partially_paid" | "paid" | "refunded";
+                                unitPricePaise: number | null;
+                                estimatePaise: number | null;
+                                couponDiscountPaise: number;
+                                loyaltyPointsReserved: number;
+                                loyaltyDiscountPaise: number;
+                                baseCostPaise: number | null;
+                                markupPercent: number | null;
+                                taxPercent: number | null;
+                                discountPaise: number;
+                                finalPricePaise: number | null;
+                                vendorPayoutPaise: number | null;
+                                agencyMarginPaise: number | null;
+                                amountPaidPaise: number;
+                                paymentMode: string | null;
+                                hotelCategory: string | null;
+                                mealPlan: string | null;
+                                pickupPoint: string | null;
+                                assignedVendorId: string | null;
+                                vendorLeadStatus: string;
+                                confirmedAt: string | null;
+                                completedAt: string | null;
+                                cancelledAt: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                                message: string | null;
+                                pagePath: string | null;
+                                adminNotes: string | null;
+                                cancelReason: string | null;
+                                inclusionsSnapshot: string[] | null;
+                                allowedTransitions: ("new" | "pending" | "in_progress" | "confirmed" | "completed" | "cancelled")[];
+                                couponRedemption: {
+                                    code: string;
+                                    discountPaise: number;
+                                    status: string;
+                                } | null;
+                                statusHistory: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    fromStatus: ("new" | "pending" | "in_progress" | "confirmed" | "completed" | "cancelled") | null;
+                                    /** @enum {string} */
+                                    toStatus: "new" | "pending" | "in_progress" | "confirmed" | "completed" | "cancelled";
+                                    actorType: string;
+                                    actorUserId: string | null;
+                                    note: string | null;
+                                    createdAt: string;
+                                }[];
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/admin/enquiries/{id}/pricing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set admin quote pricing calculation on enquiry */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        baseCostPaise: number;
+                        markupPercent: number;
+                        taxPercent: number;
+                        /** @default 0 */
+                        discountPaise: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description Updated enquiry with calculated prices */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            data: {
+                                /** Format: uuid */
+                                id: string;
+                                reference: string;
+                                /** @enum {string} */
+                                source: "package_booking" | "callback_request" | "hero_search" | "admin" | "chatbot";
+                                packageId: string | null;
+                                packageTitle: string | null;
+                                destinationId: string | null;
+                                destinationName: string | null;
+                                customerUserId: string | null;
+                                customerName: string;
+                                customerEmail: string | null;
+                                phoneCountryCode: string;
+                                phone: string;
+                                travelDate: string | null;
+                                travellers: number;
+                                /** @enum {string} */
+                                status: "new" | "pending" | "in_progress" | "confirmed" | "completed" | "cancelled";
+                                /** @enum {string} */
+                                paymentStatus: "unpaid" | "partially_paid" | "paid" | "refunded";
+                                unitPricePaise: number | null;
+                                estimatePaise: number | null;
+                                couponDiscountPaise: number;
+                                loyaltyPointsReserved: number;
+                                loyaltyDiscountPaise: number;
+                                baseCostPaise: number | null;
+                                markupPercent: number | null;
+                                taxPercent: number | null;
+                                discountPaise: number;
+                                finalPricePaise: number | null;
+                                vendorPayoutPaise: number | null;
+                                agencyMarginPaise: number | null;
+                                amountPaidPaise: number;
+                                paymentMode: string | null;
+                                hotelCategory: string | null;
+                                mealPlan: string | null;
+                                pickupPoint: string | null;
+                                assignedVendorId: string | null;
+                                vendorLeadStatus: string;
+                                confirmedAt: string | null;
+                                completedAt: string | null;
+                                cancelledAt: string | null;
+                                createdAt: string;
+                                updatedAt: string;
+                                message: string | null;
+                                pagePath: string | null;
+                                adminNotes: string | null;
+                                cancelReason: string | null;
+                                inclusionsSnapshot: string[] | null;
+                                allowedTransitions: ("new" | "pending" | "in_progress" | "confirmed" | "completed" | "cancelled")[];
+                                couponRedemption: {
+                                    code: string;
+                                    discountPaise: number;
+                                    status: string;
+                                } | null;
+                                statusHistory: {
+                                    /** Format: uuid */
+                                    id: string;
+                                    fromStatus: ("new" | "pending" | "in_progress" | "confirmed" | "completed" | "cancelled") | null;
+                                    /** @enum {string} */
+                                    toStatus: "new" | "pending" | "in_progress" | "confirmed" | "completed" | "cancelled";
+                                    actorType: string;
+                                    actorUserId: string | null;
+                                    note: string | null;
+                                    createdAt: string;
+                                }[];
+                            };
+                        };
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {

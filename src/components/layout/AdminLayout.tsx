@@ -91,56 +91,6 @@ export const AdminLayout: React.FC = () => {
     );
   };
 
-  const handleUpdateEnquiryStatus = (id: string, status: BookingEnquiry['status']) => {
-    setEnquiries(
-      enquiries.map((e) => (e.id === id ? { ...e, status } : e))
-    );
-  };
-
-  const handleDeleteEnquiry = (id: string) => {
-    setEnquiries(enquiries.filter((e) => e.id !== id));
-  };
-
-  const handleAssignVendor = (enquiryId: string, vendorId: string, vendorName: string) => {
-    setEnquiries(
-      enquiries.map((e) =>
-        e.id === enquiryId
-          ? {
-            ...e,
-            assignedVendorId: vendorId,
-            assignedVendorName: vendorName,
-            vendorLeadStatus: 'Sent to Vendor',
-          }
-          : e
-      )
-    );
-  };
-
-  const handleUpdatePricing = (
-    enquiryId: string,
-    pricing: {
-      baseCost: number;
-      markupPercent: number;
-      taxPercent: number;
-      discountAmount: number;
-      finalQuotedPrice: number;
-      vendorPayout: number;
-      agencyMargin: number;
-    }
-  ) => {
-    setEnquiries(
-      enquiries.map((e) =>
-        e.id === enquiryId
-          ? {
-            ...e,
-            ...pricing,
-            budget: `₹${pricing.finalQuotedPrice.toLocaleString('en-IN')}`,
-          }
-          : e
-      )
-    );
-  };
-
   const handleVendorLeadResponse = (enquiryId: string, response: 'Accepted' | 'Declined') => {
     setEnquiries(
       enquiries.map((e) =>
@@ -250,16 +200,7 @@ export const AdminLayout: React.FC = () => {
           />
         );
       case 'booking-enquiries':
-        return (
-          <BookingEnquiryView
-            enquiries={enquiries}
-            vendors={vendors}
-            onUpdateStatus={handleUpdateEnquiryStatus}
-            onDeleteEnquiry={handleDeleteEnquiry}
-            onAssignVendor={handleAssignVendor}
-            onUpdatePricing={handleUpdatePricing}
-          />
-        );
+        return <BookingEnquiryView vendors={vendors} />;
       case 'vendors':
         return (
           <VendorPortalView
