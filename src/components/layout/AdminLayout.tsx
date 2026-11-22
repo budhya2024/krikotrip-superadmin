@@ -11,9 +11,6 @@ import type {
   ContactMessage,
   Vendor,
   TourReview,
-  DiscountOffer,
-  TrendingVideo,
-  HomePageFaq,
 } from '../../types';
 import {
   mockTours,
@@ -23,9 +20,6 @@ import {
   mockContacts,
   mockVendors,
   mockReviews,
-  mockDiscountOffers,
-  mockTrendingVideos,
-  mockHomePageFaqs,
 } from '../../data/mockData';
 import { DashboardView } from '../views/DashboardView';
 import { HomePageView } from '../views/HomePageView';
@@ -80,7 +74,6 @@ export const AdminLayout: React.FC = () => {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [isAddTourModalOpen, setIsAddTourModalOpen] = useState(false);
 
-  // Core Data State
   const [tours, setTours] = useState<Tour[]>(mockTours);
   const [enquiries, setEnquiries] = useState<BookingEnquiry[]>(mockEnquiries);
   const [vendors, setVendors] = useState<Vendor[]>(mockVendors);
@@ -88,28 +81,7 @@ export const AdminLayout: React.FC = () => {
   const [gallery, setGallery] = useState<GalleryItem[]>(mockGallery);
   const [contacts, setContacts] = useState<ContactMessage[]>(mockContacts);
   const [reviews, setReviews] = useState<TourReview[]>(mockReviews);
-  const [discountOffers, setDiscountOffers] = useState<DiscountOffer[]>(mockDiscountOffers);
-  const [trendingVideos, setTrendingVideos] = useState<TrendingVideo[]>(mockTrendingVideos);
-  const [homePageFaqs, setHomePageFaqs] = useState<HomePageFaq[]>(mockHomePageFaqs);
 
-  // Home Page Handlers
-  const handleAddOffer = (offer: DiscountOffer) => setDiscountOffers([offer, ...discountOffers]);
-  const handleUpdateOffer = (offer: DiscountOffer) => setDiscountOffers(discountOffers.map((o) => (o.id === offer.id ? offer : o)));
-  const handleDeleteOffer = (id: string) => setDiscountOffers(discountOffers.filter((o) => o.id !== id));
-  const handleToggleOfferStatus = (id: string) => setDiscountOffers(discountOffers.map((o) => (o.id === id ? { ...o, isActive: !o.isActive } : o)));
-
-  const handleAddVideo = (video: TrendingVideo) => setTrendingVideos([video, ...trendingVideos]);
-  const handleUpdateVideo = (video: TrendingVideo) => setTrendingVideos(trendingVideos.map((v) => (v.id === video.id ? video : v)));
-  const handleDeleteVideo = (id: string) => setTrendingVideos(trendingVideos.filter((v) => v.id !== id));
-  const handleToggleVideoStatus = (id: string) => setTrendingVideos(trendingVideos.map((v) => (v.id === id ? { ...v, isActive: !v.isActive } : v)));
-
-  const handleAddFaq = (faq: HomePageFaq) => setHomePageFaqs([faq, ...homePageFaqs]);
-  const handleUpdateFaq = (faq: HomePageFaq) => setHomePageFaqs(homePageFaqs.map((f) => (f.id === faq.id ? faq : f)));
-  const handleDeleteFaq = (id: string) => setHomePageFaqs(homePageFaqs.filter((f) => f.id !== id));
-  const handleToggleFaqStatus = (id: string) => setHomePageFaqs(homePageFaqs.map((f) => (f.id === id ? { ...f, isActive: !f.isActive } : f)));
-
-
-  // Tour Handlers
   const handleAddTour = (newTour: Tour) => {
     setTours([newTour, ...tours]);
   };
@@ -128,7 +100,6 @@ export const AdminLayout: React.FC = () => {
     );
   };
 
-  // Enquiry Handlers
   const handleUpdateEnquiryStatus = (id: string, status: BookingEnquiry['status']) => {
     setEnquiries(
       enquiries.map((e) => (e.id === id ? { ...e, status } : e))
@@ -193,7 +164,6 @@ export const AdminLayout: React.FC = () => {
     );
   };
 
-  // Vendor Handlers
   const handleTogglePortalAccess = (id: string) => {
     setVendors(
       vendors.map((v) => (v.id === id ? { ...v, portalAccess: !v.portalAccess } : v))
@@ -228,7 +198,6 @@ export const AdminLayout: React.FC = () => {
     setVendors(vendors.filter((v) => v.id !== id));
   };
 
-  // Blog Handlers
   const handleAddBlog = (blogData: BlogPost | Omit<BlogPost, 'id' | 'views'>) => {
     const newPost: BlogPost = {
       ...blogData,
@@ -246,7 +215,6 @@ export const AdminLayout: React.FC = () => {
     setBlogs(blogs.filter((b) => b.id !== id));
   };
 
-  // Gallery Handlers
   const handleAddGalleryItem = (itemData: Omit<GalleryItem, 'id' | 'uploadDate'>) => {
     const newItem: GalleryItem = {
       ...itemData,
@@ -260,7 +228,6 @@ export const AdminLayout: React.FC = () => {
     setGallery(gallery.filter((g) => g.id !== id));
   };
 
-  // Contact Handlers
   const handleToggleContactReplied = (id: string) => {
     setContacts(
       contacts.map((c) => (c.id === id ? { ...c, status: c.status === 'Unread' ? 'Replied' : 'Unread' } : c))
@@ -271,7 +238,6 @@ export const AdminLayout: React.FC = () => {
     setContacts(contacts.filter((c) => c.id !== id));
   };
 
-  // Review Handlers
   const handleAddReview = (newReview: TourReview) => {
     setReviews([newReview, ...reviews]);
   };
@@ -319,25 +285,7 @@ export const AdminLayout: React.FC = () => {
           />
         );
       case 'home-page':
-        return (
-          <HomePageView
-            discountOffers={discountOffers}
-            onAddOffer={handleAddOffer}
-            onUpdateOffer={handleUpdateOffer}
-            onDeleteOffer={handleDeleteOffer}
-            onToggleOfferStatus={handleToggleOfferStatus}
-            trendingVideos={trendingVideos}
-            onAddVideo={handleAddVideo}
-            onUpdateVideo={handleUpdateVideo}
-            onDeleteVideo={handleDeleteVideo}
-            onToggleVideoStatus={handleToggleVideoStatus}
-            homePageFaqs={homePageFaqs}
-            onAddFaq={handleAddFaq}
-            onUpdateFaq={handleUpdateFaq}
-            onDeleteFaq={handleDeleteFaq}
-            onToggleFaqStatus={handleToggleFaqStatus}
-          />
-        );
+        return <HomePageView />;
       case 'manage-tours':
         return (
           <ManageTourView

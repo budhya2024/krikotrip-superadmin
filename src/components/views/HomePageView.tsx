@@ -16,7 +16,6 @@ import {
   ArrowDown,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import type { DiscountOffer, TrendingVideo, HomePageFaq } from '../../types';
 import { useTheme } from '../../context/ThemeContext';
 import { DeleteConfirmModal } from '../common/DeleteConfirmModal';
 import { ImageUploadField } from '../common/ImageUploadField';
@@ -38,50 +37,89 @@ import {
   useReorderThemesMutation,
   type AdminTheme,
 } from '../../api/themes';
+import {
+  useOffersQuery,
+  useCreateOfferMutation,
+  useUpdateOfferMutation,
+  useToggleOfferActiveMutation,
+  useDeleteOfferMutation,
+  useReorderOffersMutation,
+  type AdminOffer,
+} from '../../api/offers';
+import {
+  useVideosQuery,
+  useCreateVideoMutation,
+  useUpdateVideoMutation,
+  useToggleVideoActiveMutation,
+  useDeleteVideoMutation,
+  useReorderVideosMutation,
+  type AdminVideo,
+} from '../../api/videos';
+import {
+  useFaqsQuery,
+  useCreateFaqMutation,
+  useUpdateFaqMutation,
+  useToggleFaqActiveMutation,
+  useDeleteFaqMutation,
+  useReorderFaqsMutation,
+  type AdminFaq,
+  type FaqScope,
+  type FaqCategory,
+} from '../../api/faqs';
 
-interface HomePageViewProps {
-  discountOffers: DiscountOffer[];
-  onAddOffer: (offer: DiscountOffer) => void;
-  onUpdateOffer: (offer: DiscountOffer) => void;
-  onDeleteOffer: (id: string) => void;
-  onToggleOfferStatus: (id: string) => void;
+const formatFaqCategory = (cat: FaqCategory): string => {
+  switch (cat) {
+    case 'booking_payments':
+      return 'Booking & Payments';
+    case 'cancellation_refund':
+      return 'Cancellation & Refund';
+    case 'permits_guidelines':
+      return 'Permits & Travel Guidelines';
+    case 'general':
+    default:
+      return 'General';
+  }
+};
 
-  trendingVideos: TrendingVideo[];
-  onAddVideo: (video: TrendingVideo) => void;
-  onUpdateVideo: (video: TrendingVideo) => void;
-  onDeleteVideo: (id: string) => void;
-  onToggleVideoStatus: (id: string) => void;
+const mapFaqCategoryFilter = (cat: string): FaqCategory | undefined => {
+  switch (cat) {
+    case 'General':
+      return 'general';
+    case 'Booking & Payments':
+      return 'booking_payments';
+    case 'Cancellation & Refund':
+      return 'cancellation_refund';
+    case 'Permits & Travel Guidelines':
+      return 'permits_guidelines';
+    default:
+      return undefined;
+  }
+};
 
-  homePageFaqs: HomePageFaq[];
-  onAddFaq: (faq: HomePageFaq) => void;
-  onUpdateFaq: (faq: HomePageFaq) => void;
-  onDeleteFaq: (id: string) => void;
-  onToggleFaqStatus: (id: string) => void;
-}
+const parseDurationToSeconds = (dur: string): number | null => {
+  const trimmed = dur.trim();
+  if (!trimmed) return null;
+  const parts = trimmed.split(':').map((p) => Number(p));
+  if (parts.length === 2 && !isNaN(parts[0]!) && !isNaN(parts[1]!)) {
+    return parts[0]! * 60 + parts[1]!;
+  }
+  const num = Number(trimmed);
+  return !isNaN(num) && num > 0 ? num : null;
+};
 
-export const HomePageView: React.FC<HomePageViewProps> = ({
-  discountOffers,
-  onAddOffer,
-  onUpdateOffer,
-  onDeleteOffer,
-  onToggleOfferStatus,
+const formatSecondsToDuration = (sec: number | null | undefined): string => {
+  if (sec === null || sec === undefined || sec <= 0) return '';
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}:${s < 10 ? '0' : ''}${s}`;
+};
 
-  trendingVideos,
-  onAddVideo,
-  onUpdateVideo,
-  onDeleteVideo,
-  onToggleVideoStatus,
-
-  homePageFaqs,
-  onAddFaq,
-  onUpdateFaq,
-  onDeleteFaq,
-  onToggleFaqStatus,
-}) => {
+export const HomePageView: React.FC = () => {
   const { theme } = useTheme();
   const [activeTab, setActiveTab] = useState<'offers' | 'videos' | 'destinations' | 'themes' | 'faqs'>('destinations');
   const [searchQuery, setSearchQuery] = useState('');
   const [faqCategoryFilter, setFaqCategoryFilter] = useState('All');
+  const [faqScopeFilter, setFaqScopeFilter] = useState<'All' | 'general' | 'contact'>('All');
 
   const { data: destinations = [], isLoading: isDestinationsLoading } = useDestinationsQuery();
   const createDestinationMutation = useCreateDestinationMutation();
@@ -97,36 +135,56 @@ export const HomePageView: React.FC<HomePageViewProps> = ({
   const deleteThemeMutation = useDeleteThemeMutation();
   const reorderThemesMutation = useReorderThemesMutation();
 
+  const { data: offers = [], isLoading: isOffersLoading } = useOffersQuery();
+  const createOfferMutation = useCreateOfferMutation();
+  const updateOfferMutation = useUpdateOfferMutation();
+  const toggleOfferActiveMutation = useToggleOfferActiveMutation();
+  const deleteOfferMutation = useDeleteOfferMutation();
+  const reorderOffersMutation = useReorderOffersMutation();
+
+  const { data: videos = [], isLoading: isVideosLoading } = useVideosQuery();
+  const createVideoMutation = useCreateVideoMutation();
+  const updateVideoMutation = useUpdateVideoMutation();
+  const toggleVideoActiveMutation = useToggleVideoActiveMutation();
+  const deleteVideoMutation = useDeleteVideoMutation();
+  const reorderVideosMutation = useReorderVideosMutation();
+
+  const { data: faqs = [], isLoading: isFaqsLoading } = useFaqsQuery({
+    q: searchQuery.trim() || undefined,
+    category: mapFaqCategoryFilter(faqCategoryFilter),
+    scope: faqScopeFilter !== 'All' ? faqScopeFilter : undefined,
+  });
+  const createFaqMutation = useCreateFaqMutation();
+  const updateFaqMutation = useUpdateFaqMutation();
+  const toggleFaqActiveMutation = useToggleFaqActiveMutation();
+  const deleteFaqMutation = useDeleteFaqMutation();
+  const reorderFaqsMutation = useReorderFaqsMutation();
+
   const [isOfferModalOpen, setIsOfferModalOpen] = useState(false);
-  const [editingOffer, setEditingOffer] = useState<DiscountOffer | null>(null);
+  const [editingOffer, setEditingOffer] = useState<AdminOffer | null>(null);
+  const [offerTitle, setOfferTitle] = useState('');
+  const [offerBadgeLabel, setOfferBadgeLabel] = useState('');
+  const [offerPhoto, setOfferPhoto] = useState('');
+  const [offerPhotoMediaId, setOfferPhotoMediaId] = useState('');
+  const [offerLink, setOfferLink] = useState('');
+  const [offerValidFrom, setOfferValidFrom] = useState('');
+  const [offerValidUntil, setOfferValidUntil] = useState('');
+  const [offerIsActive, setOfferIsActive] = useState(true);
 
   const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
-  const [editingVideo, setEditingVideo] = useState<TrendingVideo | null>(null);
+  const [editingVideo, setEditingVideo] = useState<AdminVideo | null>(null);
+  const [videoTitle, setVideoTitle] = useState('');
+  const [videoDestinationId, setVideoDestinationId] = useState('');
+  const [videoUrl, setVideoUrl] = useState('');
+  const [videoThumb, setVideoThumb] = useState('');
+  const [videoThumbMediaId, setVideoThumbMediaId] = useState('');
+  const [videoDuration, setVideoDuration] = useState('');
+  const [videoViewsLabel, setVideoViewsLabel] = useState('');
+  const [videoIsActive, setVideoIsActive] = useState(true);
   const [previewVideoUrl, setPreviewVideoUrl] = useState<string | null>(null);
 
   const [isDestinationModalOpen, setIsDestinationModalOpen] = useState(false);
   const [editingDestination, setEditingDestination] = useState<AdminDestination | null>(null);
-
-  const [isThemeModalOpen, setIsThemeModalOpen] = useState(false);
-  const [editingTheme, setEditingTheme] = useState<AdminTheme | null>(null);
-
-  const [isFaqModalOpen, setIsFaqModalOpen] = useState(false);
-  const [editingFaq, setEditingFaq] = useState<HomePageFaq | null>(null);
-
-  const [deleteTarget, setDeleteTarget] = useState<{
-    id: string;
-    title: string;
-    type: 'Offer' | 'Video' | 'Destination' | 'Theme' | 'FAQ';
-  } | null>(null);
-
-  const [offerPhoto, setOfferPhoto] = useState('');
-  const [offerLink, setOfferLink] = useState('');
-
-  const [videoTitle, setVideoTitle] = useState('');
-  const [videoUrl, setVideoUrl] = useState('');
-  const [videoThumb, setVideoThumb] = useState('');
-  const [videoDestination, setVideoDestination] = useState('Kashmir');
-
   const [destName, setDestName] = useState('');
   const [destSlug, setDestSlug] = useState('');
   const [destRegion, setDestRegion] = useState('');
@@ -140,101 +198,196 @@ export const HomePageView: React.FC<HomePageViewProps> = ({
   const [destIsVendorTerritory, setDestIsVendorTerritory] = useState(false);
   const [destIsActive, setDestIsActive] = useState(true);
 
+  const [isThemeModalOpen, setIsThemeModalOpen] = useState(false);
+  const [editingTheme, setEditingTheme] = useState<AdminTheme | null>(null);
   const [themeName, setThemeName] = useState('');
   const [themePhoto, setThemePhoto] = useState('');
   const [themePhotoMediaId, setThemePhotoMediaId] = useState<string | null>(null);
   const [themeLink, setThemeLink] = useState('');
   const [themeIsActive, setThemeIsActive] = useState(true);
 
+  const [isFaqModalOpen, setIsFaqModalOpen] = useState(false);
+  const [editingFaq, setEditingFaq] = useState<AdminFaq | null>(null);
+  const [faqScope, setFaqScope] = useState<FaqScope>('general');
+  const [faqCategory, setFaqCategory] = useState<FaqCategory>('general');
   const [faqQuestion, setFaqQuestion] = useState('');
   const [faqAnswer, setFaqAnswer] = useState('');
-  const [faqCategory, setFaqCategory] = useState<HomePageFaq['category']>('General');
+  const [faqIsActive, setFaqIsActive] = useState(true);
+
+  const [deleteTarget, setDeleteTarget] = useState<{
+    id: string;
+    title: string;
+    type: 'Offer' | 'Video' | 'Destination' | 'Theme' | 'FAQ';
+  } | null>(null);
 
   const handleOpenAddOffer = () => {
     setEditingOffer(null);
+    setOfferTitle('');
+    setOfferBadgeLabel('');
     setOfferPhoto('');
+    setOfferPhotoMediaId('');
     setOfferLink('');
+    setOfferValidFrom('');
+    setOfferValidUntil('');
+    setOfferIsActive(true);
     setIsOfferModalOpen(true);
   };
 
-  const handleOpenEditOffer = (offer: DiscountOffer) => {
+  const handleOpenEditOffer = (offer: AdminOffer) => {
     setEditingOffer(offer);
-    setOfferPhoto(offer.photoUrl);
+    setOfferTitle(offer.title);
+    setOfferBadgeLabel(offer.badgeLabel ?? '');
+    setOfferPhoto(offer.photoUrl ?? '');
+    setOfferPhotoMediaId(offer.photoMediaId);
     setOfferLink(offer.linkUrl);
+    setOfferValidFrom(offer.validFrom ?? '');
+    setOfferValidUntil(offer.validUntil ?? '');
+    setOfferIsActive(offer.isActive);
     setIsOfferModalOpen(true);
   };
 
   const handleSaveOffer = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!offerPhoto.trim() || !offerLink.trim()) return;
+    if (!offerTitle.trim() || !offerLink.trim() || !offerPhotoMediaId) {
+      toast.error('Please fill all required fields and upload a banner image');
+      return;
+    }
+
+    const payload = {
+      title: offerTitle.trim(),
+      badgeLabel: offerBadgeLabel.trim() || null,
+      photoMediaId: offerPhotoMediaId,
+      linkUrl: offerLink.trim(),
+      validFrom: offerValidFrom.trim() || null,
+      validUntil: offerValidUntil.trim() || null,
+      isActive: offerIsActive,
+      displayOrder: editingOffer ? editingOffer.displayOrder : offers.length + 1,
+    };
 
     if (editingOffer) {
-      onUpdateOffer({
-        ...editingOffer,
-        title: 'Home Banner',
-        photoUrl: offerPhoto.trim(),
-        linkUrl: offerLink.trim(),
-        discountBadge: undefined,
-      });
+      updateOfferMutation.mutate(
+        { id: editingOffer.id, input: payload },
+        {
+          onSuccess: () => {
+            toast.success('Offer banner updated successfully');
+            setIsOfferModalOpen(false);
+          },
+          onError: () => toast.error('Failed to update offer banner'),
+        },
+      );
     } else {
-      const newOffer: DiscountOffer = {
-        id: `off-${Date.now()}`,
-        title: 'Home Banner',
-        photoUrl: offerPhoto.trim(),
-        linkUrl: offerLink.trim(),
-        discountBadge: undefined,
-        isActive: true,
-      };
-      onAddOffer(newOffer);
+      createOfferMutation.mutate(payload, {
+        onSuccess: () => {
+          toast.success('Offer banner created successfully');
+          setIsOfferModalOpen(false);
+        },
+        onError: () => toast.error('Failed to create offer banner'),
+      });
     }
-    setIsOfferModalOpen(false);
+  };
+
+  const handleMoveOffer = (index: number, direction: 'up' | 'down') => {
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= offers.length) return;
+    const current = offers[index];
+    const target = offers[targetIndex];
+    if (!current || !target) return;
+
+    reorderOffersMutation.mutate(
+      [
+        { id: current.id, displayOrder: target.displayOrder },
+        { id: target.id, displayOrder: current.displayOrder },
+      ],
+      {
+        onSuccess: () => toast.success('Offers reordered'),
+        onError: () => toast.error('Failed to reorder offers'),
+      },
+    );
   };
 
   const handleOpenAddVideo = () => {
     setEditingVideo(null);
     setVideoTitle('');
-    setVideoUrl('https://assets.mixkit.co/videos/preview/mixkit-taking-photos-from-a-boat-on-a-river-42777-large.mp4');
-    setVideoThumb('https://images.unsplash.com/photo-1595815771614-ade9d652a65d?auto=format&fit=crop&w=600&q=80');
-    setVideoDestination('Kashmir');
+    setVideoDestinationId(destinations[0]?.id ?? '');
+    setVideoUrl('');
+    setVideoThumb('');
+    setVideoThumbMediaId('');
+    setVideoDuration('');
+    setVideoViewsLabel('');
+    setVideoIsActive(true);
     setIsVideoModalOpen(true);
   };
 
-  const handleOpenEditVideo = (v: TrendingVideo) => {
+  const handleOpenEditVideo = (v: AdminVideo) => {
     setEditingVideo(v);
     setVideoTitle(v.title);
-    setVideoUrl(v.videoUrl);
-    setVideoThumb(v.thumbnailUrl);
-    setVideoDestination(v.destination);
+    setVideoDestinationId(v.destinationId ?? '');
+    setVideoUrl(v.videoUrl ?? '');
+    setVideoThumb(v.thumbnailUrl ?? '');
+    setVideoThumbMediaId(v.thumbnailMediaId ?? '');
+    setVideoDuration(formatSecondsToDuration(v.durationSeconds));
+    setVideoViewsLabel(v.viewsLabel ?? '');
+    setVideoIsActive(v.isActive);
     setIsVideoModalOpen(true);
   };
 
   const handleSaveVideo = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!videoTitle.trim() || !videoUrl.trim()) return;
+    if (!videoTitle.trim()) {
+      toast.error('Video title is required');
+      return;
+    }
+
+    const payload = {
+      title: videoTitle.trim(),
+      destinationId: videoDestinationId.trim() || null,
+      videoUrl: videoUrl.trim() || null,
+      thumbnailMediaId: videoThumbMediaId.trim() || null,
+      durationSeconds: parseDurationToSeconds(videoDuration),
+      viewsLabel: videoViewsLabel.trim() || null,
+      isActive: videoIsActive,
+      displayOrder: editingVideo ? editingVideo.displayOrder : videos.length + 1,
+    };
 
     if (editingVideo) {
-      onUpdateVideo({
-        ...editingVideo,
-        title: videoTitle.trim(),
-        videoUrl: videoUrl.trim(),
-        thumbnailUrl: videoThumb.trim() || 'https://images.unsplash.com/photo-1595815771614-ade9d652a65d?auto=format&fit=crop&w=600&q=80',
-        destination: videoDestination,
-      });
+      updateVideoMutation.mutate(
+        { id: editingVideo.id, input: payload },
+        {
+          onSuccess: () => {
+            toast.success('Video updated successfully');
+            setIsVideoModalOpen(false);
+          },
+          onError: () => toast.error('Failed to update video'),
+        },
+      );
     } else {
-      const newVid: TrendingVideo = {
-        id: `vid-${Date.now()}`,
-        title: videoTitle.trim(),
-        videoUrl: videoUrl.trim(),
-        thumbnailUrl: videoThumb.trim() || 'https://images.unsplash.com/photo-1595815771614-ade9d652a65d?auto=format&fit=crop&w=600&q=80',
-        destination: videoDestination,
-        duration: '0:45',
-        viewsCount: '10K views',
-        isActive: true,
-        order: trendingVideos.length + 1,
-      };
-      onAddVideo(newVid);
+      createVideoMutation.mutate(payload, {
+        onSuccess: () => {
+          toast.success('Video created successfully');
+          setIsVideoModalOpen(false);
+        },
+        onError: () => toast.error('Failed to create video'),
+      });
     }
-    setIsVideoModalOpen(false);
+  };
+
+  const handleMoveVideo = (index: number, direction: 'up' | 'down') => {
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= videos.length) return;
+    const current = videos[index];
+    const target = videos[targetIndex];
+    if (!current || !target) return;
+
+    reorderVideosMutation.mutate(
+      [
+        { id: current.id, displayOrder: target.displayOrder },
+        { id: target.id, displayOrder: current.displayOrder },
+      ],
+      {
+        onSuccess: () => toast.success('Videos reordered'),
+        onError: () => toast.error('Failed to reorder videos'),
+      },
+    );
   };
 
   const handleOpenAddDestination = () => {
@@ -406,53 +559,93 @@ export const HomePageView: React.FC<HomePageViewProps> = ({
 
   const handleOpenAddFaq = () => {
     setEditingFaq(null);
+    setFaqScope('general');
+    setFaqCategory('general');
     setFaqQuestion('');
     setFaqAnswer('');
-    setFaqCategory('General');
+    setFaqIsActive(true);
     setIsFaqModalOpen(true);
   };
 
-  const handleOpenEditFaq = (faq: HomePageFaq) => {
+  const handleOpenEditFaq = (faq: AdminFaq) => {
     setEditingFaq(faq);
+    setFaqScope(faq.scope);
+    setFaqCategory(faq.category);
     setFaqQuestion(faq.question);
     setFaqAnswer(faq.answer);
-    setFaqCategory(faq.category);
+    setFaqIsActive(faq.isActive);
     setIsFaqModalOpen(true);
   };
 
   const handleSaveFaq = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!faqQuestion.trim() || !faqAnswer.trim()) return;
+    if (!faqQuestion.trim() || !faqAnswer.trim()) {
+      toast.error('Question and answer are required');
+      return;
+    }
+
+    const payload = {
+      scope: faqScope,
+      category: faqCategory,
+      question: faqQuestion.trim(),
+      answer: faqAnswer.trim(),
+      isActive: faqIsActive,
+      displayOrder: editingFaq ? editingFaq.displayOrder : faqs.length + 1,
+    };
 
     if (editingFaq) {
-      onUpdateFaq({
-        ...editingFaq,
-        question: faqQuestion.trim(),
-        answer: faqAnswer.trim(),
-        category: faqCategory,
-      });
+      updateFaqMutation.mutate(
+        { id: editingFaq.id, input: payload },
+        {
+          onSuccess: () => {
+            toast.success('FAQ updated successfully');
+            setIsFaqModalOpen(false);
+          },
+          onError: () => toast.error('Failed to update FAQ'),
+        },
+      );
     } else {
-      const newFaq: HomePageFaq = {
-        id: `hfaq-${Date.now()}`,
-        question: faqQuestion.trim(),
-        answer: faqAnswer.trim(),
-        category: faqCategory,
-        displayOrder: homePageFaqs.length + 1,
-        isActive: true,
-      };
-      onAddFaq(newFaq);
+      createFaqMutation.mutate(payload, {
+        onSuccess: () => {
+          toast.success('FAQ created successfully');
+          setIsFaqModalOpen(false);
+        },
+        onError: () => toast.error('Failed to create FAQ'),
+      });
     }
-    setIsFaqModalOpen(false);
+  };
+
+  const handleMoveFaq = (index: number, direction: 'up' | 'down') => {
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= faqs.length) return;
+    const current = faqs[index];
+    const target = faqs[targetIndex];
+    if (!current || !target) return;
+
+    reorderFaqsMutation.mutate(
+      [
+        { id: current.id, displayOrder: target.displayOrder },
+        { id: target.id, displayOrder: current.displayOrder },
+      ],
+      {
+        onSuccess: () => toast.success('FAQs reordered'),
+        onError: () => toast.error('Failed to reorder FAQs'),
+      },
+    );
   };
 
   const handleConfirmDelete = () => {
     if (!deleteTarget) return;
     if (deleteTarget.type === 'Offer') {
-      onDeleteOffer(deleteTarget.id);
-      toast.success('Offer removed');
+      deleteOfferMutation.mutate(deleteTarget.id, {
+        onSuccess: () => toast.success('Offer removed'),
+        onError: () => toast.error('Failed to remove offer'),
+      });
     } else if (deleteTarget.type === 'Video') {
-      onDeleteVideo(deleteTarget.id);
-      toast.success('Video removed from slider');
+      deleteVideoMutation.mutate(deleteTarget.id, {
+        onSuccess: () => toast.success('Video removed from slider'),
+        onError: () => toast.error('Failed to remove video'),
+      });
     } else if (deleteTarget.type === 'Destination') {
       deleteDestinationMutation.mutate(deleteTarget.id, {
         onSuccess: () => toast.success('Destination deleted'),
@@ -464,19 +657,13 @@ export const HomePageView: React.FC<HomePageViewProps> = ({
         onError: () => toast.error('Failed to delete theme'),
       });
     } else if (deleteTarget.type === 'FAQ') {
-      onDeleteFaq(deleteTarget.id);
-      toast.success('FAQ deleted');
+      deleteFaqMutation.mutate(deleteTarget.id, {
+        onSuccess: () => toast.success('FAQ deleted'),
+        onError: () => toast.error('Failed to delete FAQ'),
+      });
     }
     setDeleteTarget(null);
   };
-
-  const filteredFaqs = homePageFaqs.filter((faq) => {
-    const matchesSearch =
-      faq.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      faq.answer.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCat = faqCategoryFilter === 'All' || faq.category === faqCategoryFilter;
-    return matchesSearch && matchesCat;
-  });
 
   return (
     <div className="space-y-6">
@@ -559,7 +746,7 @@ export const HomePageView: React.FC<HomePageViewProps> = ({
           }`}
         >
           <Tag className="w-4 h-4" />
-          <span>Discount Offers & Banners ({discountOffers.length})</span>
+          <span>Discount Offers &amp; Banners ({offers.length})</span>
         </button>
 
         <button
@@ -571,7 +758,7 @@ export const HomePageView: React.FC<HomePageViewProps> = ({
           }`}
         >
           <Film className="w-4 h-4" />
-          <span>Trending Video Slider ({trendingVideos.length})</span>
+          <span>Trending Video Slider ({videos.length})</span>
         </button>
 
         <button
@@ -607,203 +794,293 @@ export const HomePageView: React.FC<HomePageViewProps> = ({
           }`}
         >
           <HelpCircle className="w-4 h-4" />
-          <span>Home Page FAQs ({homePageFaqs.length})</span>
+          <span>Home Page FAQs ({faqs.length})</span>
         </button>
       </div>
 
       {activeTab === 'offers' && (
         <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {discountOffers.map((offer) => (
-              <div
-                key={offer.id}
-                className={`rounded-[4px] border overflow-hidden flex flex-col justify-between group transition-all ${
-                  theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
-                }`}
-              >
-                <div className="relative aspect-16/9 overflow-hidden bg-slate-100 dark:bg-slate-800">
-                  <img
-                    src={offer.photoUrl}
-                    alt={offer.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
-                  <div className="absolute top-2 right-2">
-                    <span
-                      className={`px-2 py-0.5 rounded-[3px] text-[10px] font-bold tracking-wider uppercase shadow-xs ${
-                        offer.isActive ? 'bg-emerald-500 text-white' : 'bg-slate-500 text-white'
-                      }`}
-                    >
-                      {offer.isActive ? 'Active' : 'Draft'}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="p-3 space-y-2 flex-1 flex flex-col justify-between">
-                  <div className="p-2 rounded-[4px] bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 flex items-center justify-between text-xs font-mono text-blue-600 dark:text-blue-400">
-                    <span className="truncate pr-2">{offer.linkUrl}</span>
-                    <a
-                      href={offer.linkUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="shrink-0 hover:text-blue-700 p-0.5"
-                      title="Test destination link"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </a>
-                  </div>
-
-                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={offer.isActive}
-                      onClick={() => onToggleOfferStatus(offer.id)}
-                      className="inline-flex items-center gap-2 cursor-pointer"
-                    >
+          {isOffersLoading ? (
+            <div className="p-8 text-center text-xs text-slate-500">Loading offers...</div>
+          ) : offers.length === 0 ? (
+            <div className="p-8 text-center text-xs text-slate-500 border border-dashed rounded-[4px] border-slate-300 dark:border-slate-700">
+              No promotional offers found. Click &quot;Add Discount Offer&quot; above to create one.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {offers.map((offer, index) => (
+                <div
+                  key={offer.id}
+                  className={`rounded-[4px] border overflow-hidden flex flex-col justify-between group transition-all ${
+                    theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+                  }`}
+                >
+                  <div className="relative aspect-16/9 overflow-hidden bg-slate-100 dark:bg-slate-800">
+                    <img
+                      src={offer.photoUrl || ''}
+                      alt={offer.title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                    <div className="absolute top-2 right-2">
                       <span
-                        className={`relative inline-flex h-4.5 w-8 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
-                          offer.isActive ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'
+                        className={`px-2 py-0.5 rounded-[3px] text-[10px] font-bold tracking-wider uppercase shadow-xs ${
+                          offer.isActive ? 'bg-emerald-500 text-white' : 'bg-slate-500 text-white'
                         }`}
                       >
-                        <span
-                          className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${
-                            offer.isActive ? 'translate-x-3.5' : 'translate-x-0'
-                          }`}
-                        />
+                        {offer.isActive ? 'Active' : 'Draft'}
                       </span>
-                      <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">
-                        {offer.isActive ? 'Active' : 'Off'}
-                      </span>
-                    </button>
+                    </div>
+                    {offer.badgeLabel && (
+                      <div className="absolute top-2 left-2">
+                        <span className="px-2 py-0.5 rounded-[3px] text-[10px] font-bold bg-amber-500 text-white shadow-xs">
+                          {offer.badgeLabel}
+                        </span>
+                      </div>
+                    )}
+                  </div>
 
-                    <div className="flex items-center gap-1">
+                  <div className="p-3 space-y-2 flex-1 flex flex-col justify-between">
+                    <div className="space-y-1">
+                      <h4 className="text-sm font-semibold line-clamp-1 text-slate-900 dark:text-white">
+                        {offer.title}
+                      </h4>
+                      <div className="p-2 rounded-[4px] bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/80 flex items-center justify-between text-xs font-mono text-blue-600 dark:text-blue-400">
+                        <span className="truncate pr-2">{offer.linkUrl}</span>
+                        <a
+                          href={offer.linkUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="shrink-0 hover:text-blue-700 p-0.5"
+                          title="Test destination link"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
                       <button
                         type="button"
-                        onClick={() => handleOpenEditOffer(offer)}
-                        className="p-1.5 rounded-[4px] text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                        title="Edit photo & link"
-                      >
-                        <Edit3 className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
+                        role="switch"
+                        aria-checked={offer.isActive}
                         onClick={() =>
-                          setDeleteTarget({
-                            id: offer.id,
-                            title: offer.title,
-                            type: 'Offer',
-                          })
+                          toggleOfferActiveMutation.mutate(
+                            { id: offer.id, isActive: !offer.isActive },
+                            {
+                              onSuccess: () =>
+                                toast.success(`Offer ${offer.isActive ? 'deactivated' : 'activated'}`),
+                              onError: () => toast.error('Failed to toggle offer status'),
+                            },
+                          )
                         }
-                        className="p-1.5 rounded-[4px] text-rose-500 hover:bg-rose-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                        title="Delete offer banner"
+                        className="inline-flex items-center gap-2 cursor-pointer"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <span
+                          className={`relative inline-flex h-4.5 w-8 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
+                            offer.isActive ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'
+                          }`}
+                        >
+                          <span
+                            className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${
+                              offer.isActive ? 'translate-x-3.5' : 'translate-x-0'
+                            }`}
+                          />
+                        </span>
+                        <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                          {offer.isActive ? 'Active' : 'Off'}
+                        </span>
                       </button>
+
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleMoveOffer(index, 'up')}
+                          disabled={index === 0}
+                          className="p-1 rounded-[4px] text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                          title="Move up"
+                        >
+                          <ArrowUp className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleMoveOffer(index, 'down')}
+                          disabled={index === offers.length - 1}
+                          className="p-1 rounded-[4px] text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                          title="Move down"
+                        >
+                          <ArrowDown className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditOffer(offer)}
+                          className="p-1.5 rounded-[4px] text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                          title="Edit offer"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setDeleteTarget({
+                              id: offer.id,
+                              title: offer.title,
+                              type: 'Offer',
+                            })
+                          }
+                          className="p-1.5 rounded-[4px] text-rose-500 hover:bg-rose-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                          title="Delete offer banner"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
       {activeTab === 'videos' && (
         <div className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {trendingVideos.map((video) => (
-              <div
-                key={video.id}
-                className={`rounded-[4px] border overflow-hidden flex flex-col justify-between group transition-all ${
-                  theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
-                }`}
-              >
-                <div className="relative aspect-16/9 overflow-hidden bg-slate-100 dark:bg-slate-800">
-                  <img
-                    src={video.thumbnailUrl}
-                    alt={video.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
-                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-90 group-hover:opacity-100 transition-opacity">
-                    <button
-                      type="button"
-                      onClick={() => setPreviewVideoUrl(video.videoUrl)}
-                      className="w-10 h-10 rounded-full bg-white/90 text-blue-600 flex items-center justify-center hover:scale-110 transition-transform cursor-pointer shadow-lg"
-                      title="Preview video"
-                    >
-                      <Play className="w-4 h-4 ml-0.5 fill-current" />
-                    </button>
+          {isVideosLoading ? (
+            <div className="p-8 text-center text-xs text-slate-500">Loading videos...</div>
+          ) : videos.length === 0 ? (
+            <div className="p-8 text-center text-xs text-slate-500 border border-dashed rounded-[4px] border-slate-300 dark:border-slate-700">
+              No trending videos found. Click &quot;Add Trending Video&quot; above to create one.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {videos.map((video, index) => (
+                <div
+                  key={video.id}
+                  className={`rounded-[4px] border overflow-hidden flex flex-col justify-between group transition-all ${
+                    theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+                  }`}
+                >
+                  <div className="relative aspect-16/9 overflow-hidden bg-slate-100 dark:bg-slate-800">
+                    <img
+                      src={video.thumbnailUrl || 'https://images.unsplash.com/photo-1595815771614-ade9d652a65d?auto=format&fit=crop&w=600&q=80'}
+                      alt={video.title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                    {video.videoUrl && (
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-90 group-hover:opacity-100 transition-opacity">
+                        <button
+                          type="button"
+                          onClick={() => setPreviewVideoUrl(video.videoUrl)}
+                          className="w-10 h-10 rounded-full bg-white/90 text-blue-600 flex items-center justify-center hover:scale-110 transition-transform cursor-pointer shadow-lg"
+                          title="Preview video"
+                        >
+                          <Play className="w-4 h-4 ml-0.5 fill-current" />
+                        </button>
+                      </div>
+                    )}
+                    {video.destinationName && (
+                      <div className="absolute top-2 left-2">
+                        <span className="px-2 py-0.5 rounded-[3px] text-[10px] font-semibold bg-black/70 text-white backdrop-blur-xs">
+                          {video.destinationName}
+                        </span>
+                      </div>
+                    )}
+                    <div className="absolute bottom-2 right-2 flex items-center gap-1.5 text-[10px] text-white bg-black/70 px-1.5 py-0.5 rounded-[3px] backdrop-blur-xs">
+                      {video.durationSeconds && (
+                        <>
+                          <span>{formatSecondsToDuration(video.durationSeconds)}</span>
+                          {video.viewsLabel && <span>•</span>}
+                        </>
+                      )}
+                      {video.viewsLabel && <span>{video.viewsLabel}</span>}
+                    </div>
                   </div>
-                  <div className="absolute top-2 left-2">
-                    <span className="px-2 py-0.5 rounded-[3px] text-[10px] font-semibold bg-black/70 text-white backdrop-blur-xs">
-                      {video.destination}
-                    </span>
-                  </div>
-                  <div className="absolute bottom-2 right-2 flex items-center gap-1.5 text-[10px] text-white bg-black/70 px-1.5 py-0.5 rounded-[3px] backdrop-blur-xs">
-                    <span>{video.duration || '0:45'}</span>
-                    <span>•</span>
-                    <span>{video.viewsCount || '10K views'}</span>
-                  </div>
-                </div>
 
-                <div className="p-3 space-y-2 flex-1 flex flex-col justify-between">
-                  <h4 className="text-sm font-semibold line-clamp-1 text-slate-900 dark:text-white">
-                    {video.title}
-                  </h4>
+                  <div className="p-3 space-y-2 flex-1 flex flex-col justify-between">
+                    <h4 className="text-sm font-semibold line-clamp-1 text-slate-900 dark:text-white">
+                      {video.title}
+                    </h4>
 
-                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={video.isActive}
-                      onClick={() => onToggleVideoStatus(video.id)}
-                      className="inline-flex items-center gap-2 cursor-pointer"
-                    >
-                      <span
-                        className={`relative inline-flex h-4.5 w-8 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
-                          video.isActive ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'
-                        }`}
+                    <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={video.isActive}
+                        onClick={() =>
+                          toggleVideoActiveMutation.mutate(
+                            { id: video.id, isActive: !video.isActive },
+                            {
+                              onSuccess: () =>
+                                toast.success(`Video ${video.isActive ? 'deactivated' : 'activated'}`),
+                              onError: () => toast.error('Failed to toggle video status'),
+                            },
+                          )
+                        }
+                        className="inline-flex items-center gap-2 cursor-pointer"
                       >
                         <span
-                          className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${
-                            video.isActive ? 'translate-x-3.5' : 'translate-x-0'
+                          className={`relative inline-flex h-4.5 w-8 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out ${
+                            video.isActive ? 'bg-blue-600' : 'bg-slate-300 dark:bg-slate-700'
                           }`}
-                        />
-                      </span>
-                      <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">
-                        {video.isActive ? 'Active' : 'Off'}
-                      </span>
-                    </button>
+                        >
+                          <span
+                            className={`pointer-events-none inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${
+                              video.isActive ? 'translate-x-3.5' : 'translate-x-0'
+                            }`}
+                          />
+                        </span>
+                        <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                          {video.isActive ? 'Active' : 'Off'}
+                        </span>
+                      </button>
 
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => handleOpenEditVideo(video)}
-                        className="p-1.5 rounded-[4px] text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                        title="Edit video title & destination"
-                      >
-                        <Edit3 className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setDeleteTarget({
-                            id: video.id,
-                            title: video.title,
-                            type: 'Video',
-                          })
-                        }
-                        className="p-1.5 rounded-[4px] text-rose-500 hover:bg-rose-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                        title="Delete video"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleMoveVideo(index, 'up')}
+                          disabled={index === 0}
+                          className="p-1 rounded-[4px] text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                          title="Move up"
+                        >
+                          <ArrowUp className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleMoveVideo(index, 'down')}
+                          disabled={index === videos.length - 1}
+                          className="p-1 rounded-[4px] text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                          title="Move down"
+                        >
+                          <ArrowDown className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditVideo(video)}
+                          className="p-1.5 rounded-[4px] text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                          title="Edit video"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setDeleteTarget({
+                              id: video.id,
+                              title: video.title,
+                              type: 'Video',
+                            })
+                          }
+                          className="p-1.5 rounded-[4px] text-rose-500 hover:bg-rose-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                          title="Delete video"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -1121,7 +1398,23 @@ export const HomePageView: React.FC<HomePageViewProps> = ({
               />
             </div>
 
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1 border-r border-slate-200 dark:border-slate-700 pr-2">
+                {(['All', 'general', 'contact'] as const).map((sc) => (
+                  <button
+                    key={sc}
+                    onClick={() => setFaqScopeFilter(sc)}
+                    className={`px-2.5 py-1 rounded-[4px] text-xs font-semibold shrink-0 transition-colors cursor-pointer ${
+                      faqScopeFilter === sc
+                        ? 'bg-blue-600 text-white'
+                        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    {sc === 'All' ? 'All Scopes' : sc === 'general' ? 'General' : 'Contact'}
+                  </button>
+                ))}
+              </div>
+
               {['All', 'General', 'Booking & Payments', 'Cancellation & Refund', 'Permits & Travel Guidelines'].map((cat) => (
                 <button
                   key={cat}
@@ -1139,12 +1432,14 @@ export const HomePageView: React.FC<HomePageViewProps> = ({
           </div>
 
           <div className="divide-y divide-slate-100 dark:divide-slate-800">
-            {filteredFaqs.length === 0 ? (
+            {isFaqsLoading ? (
+              <div className="p-8 text-center text-xs text-slate-500">Loading FAQs...</div>
+            ) : faqs.length === 0 ? (
               <div className="p-8 text-center text-xs text-slate-500">
                 No FAQs match your search or filter criteria.
               </div>
             ) : (
-              filteredFaqs.map((faq) => (
+              faqs.map((faq, index) => (
                 <div
                   key={faq.id}
                   className={`p-4 sm:p-5 flex flex-col sm:flex-row sm:items-start justify-between gap-4 transition-colors ${
@@ -1152,9 +1447,12 @@ export const HomePageView: React.FC<HomePageViewProps> = ({
                   }`}
                 >
                   <div className="space-y-1.5 flex-1 pr-2">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="px-2 py-0.5 rounded-[3px] text-[10px] font-semibold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-900/60">
+                        {faq.scope === 'contact' ? 'Contact Us' : 'General Site'}
+                      </span>
                       <span className="px-2 py-0.5 rounded-[3px] text-[10px] font-semibold bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-900/60">
-                        {faq.category}
+                        {formatFaqCategory(faq.category)}
                       </span>
                       <span
                         className={`text-[10px] font-bold uppercase tracking-wider ${
@@ -1177,7 +1475,16 @@ export const HomePageView: React.FC<HomePageViewProps> = ({
                       type="button"
                       role="switch"
                       aria-checked={faq.isActive}
-                      onClick={() => onToggleFaqStatus(faq.id)}
+                      onClick={() =>
+                        toggleFaqActiveMutation.mutate(
+                          { id: faq.id, isActive: !faq.isActive },
+                          {
+                            onSuccess: () =>
+                              toast.success(`FAQ ${faq.isActive ? 'hidden' : 'live'}`),
+                            onError: () => toast.error('Failed to toggle FAQ status'),
+                          },
+                        )
+                      }
                       className="inline-flex items-center gap-1.5 cursor-pointer text-xs font-semibold text-slate-500"
                     >
                       <span
@@ -1194,6 +1501,24 @@ export const HomePageView: React.FC<HomePageViewProps> = ({
                     </button>
 
                     <div className="flex items-center gap-1 border-l border-slate-200 dark:border-slate-800 pl-3">
+                      <button
+                        type="button"
+                        onClick={() => handleMoveFaq(index, 'up')}
+                        disabled={index === 0}
+                        className="p-1 rounded-[4px] text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                        title="Move up"
+                      >
+                        <ArrowUp className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleMoveFaq(index, 'down')}
+                        disabled={index === faqs.length - 1}
+                        className="p-1 rounded-[4px] text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                        title="Move down"
+                      >
+                        <ArrowDown className="w-3.5 h-3.5" />
+                      </button>
                       <button
                         type="button"
                         onClick={() => handleOpenEditFaq(faq)}
@@ -1228,7 +1553,7 @@ export const HomePageView: React.FC<HomePageViewProps> = ({
       {isOfferModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div
-            className={`w-full max-w-lg rounded-[4px] border shadow-2xl p-6 ${
+            className={`w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-[4px] border shadow-2xl p-6 ${
               theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-900'
             }`}
           >
@@ -1249,10 +1574,44 @@ export const HomePageView: React.FC<HomePageViewProps> = ({
             </div>
 
             <form onSubmit={handleSaveOffer} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">
+                  Offer Title *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Exclusive Tour Package Offer"
+                  value={offerTitle}
+                  onChange={(e) => setOfferTitle(e.target.value)}
+                  className={`w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none font-semibold ${
+                    theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'
+                  }`}
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">
+                  Badge Label (Optional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. FLAT 25% OFF, SAVE ₹3,500"
+                  value={offerBadgeLabel}
+                  onChange={(e) => setOfferBadgeLabel(e.target.value)}
+                  className={`w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none ${
+                    theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'
+                  }`}
+                />
+              </div>
+
               <ImageUploadField
                 label="Offer Banner Graphic (16:9) *"
                 value={offerPhoto}
-                onChange={setOfferPhoto}
+                onChange={(url, mediaId) => {
+                  setOfferPhoto(url);
+                  if (mediaId) setOfferPhotoMediaId(mediaId);
+                }}
                 aspectRatio="16/9"
                 placeholder="Choose Offer Photo or Drag & Drop"
               />
@@ -1264,13 +1623,42 @@ export const HomePageView: React.FC<HomePageViewProps> = ({
                 <input
                   type="text"
                   required
-                  placeholder="/packages/andaman or https://krikotrip.com/..."
+                  placeholder="/tour-packages or https://..."
                   value={offerLink}
                   onChange={(e) => setOfferLink(e.target.value)}
                   className={`w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none font-mono text-blue-600 dark:text-blue-400 ${
                     theme === 'dark' ? 'bg-slate-800 border-slate-700' : 'bg-slate-50 border-slate-200'
                   }`}
                 />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">
+                    Valid From (Optional)
+                  </label>
+                  <input
+                    type="date"
+                    value={offerValidFrom}
+                    onChange={(e) => setOfferValidFrom(e.target.value)}
+                    className={`w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none ${
+                      theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'
+                    }`}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">
+                    Valid Until (Optional)
+                  </label>
+                  <input
+                    type="date"
+                    value={offerValidUntil}
+                    onChange={(e) => setOfferValidUntil(e.target.value)}
+                    className={`w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none ${
+                      theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'
+                    }`}
+                  />
+                </div>
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
@@ -1283,7 +1671,8 @@ export const HomePageView: React.FC<HomePageViewProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 text-xs sm:text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-[4px] shadow-xs cursor-pointer"
+                  disabled={createOfferMutation.isPending || updateOfferMutation.isPending}
+                  className="px-5 py-2 text-xs sm:text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-[4px] shadow-xs cursor-pointer disabled:opacity-50"
                 >
                   {editingOffer ? 'Save Banner' : 'Upload Banner'}
                 </button>
@@ -1296,7 +1685,7 @@ export const HomePageView: React.FC<HomePageViewProps> = ({
       {isVideoModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div
-            className={`w-full max-w-lg rounded-[4px] border shadow-2xl p-6 ${
+            className={`w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-[4px] border shadow-2xl p-6 ${
               theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-900'
             }`}
           >
@@ -1337,29 +1726,32 @@ export const HomePageView: React.FC<HomePageViewProps> = ({
 
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">
-                  Destination Region Tag
+                  Destination (Optional)
                 </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Andaman, Kashmir, Kerala"
-                  value={videoDestination}
-                  onChange={(e) => setVideoDestination(e.target.value)}
-                  className={`w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none ${
+                <select
+                  value={videoDestinationId}
+                  onChange={(e) => setVideoDestinationId(e.target.value)}
+                  className={`w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none font-semibold ${
                     theme === 'dark'
                       ? 'bg-slate-800 border-slate-700 text-white'
                       : 'bg-slate-50 border-slate-200 text-slate-900'
                   }`}
-                />
+                >
+                  <option value="">No specific destination</option>
+                  {destinations.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name} ({d.region})
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">
-                  Direct Video MP4 URL *
+                  Direct Video MP4 URL
                 </label>
                 <input
                   type="url"
-                  required
                   placeholder="https://assets.mixkit.co/... or CDN MP4"
                   value={videoUrl}
                   onChange={(e) => setVideoUrl(e.target.value)}
@@ -1372,10 +1764,44 @@ export const HomePageView: React.FC<HomePageViewProps> = ({
               <ImageUploadField
                 label="Video Cover Thumbnail Photo"
                 value={videoThumb}
-                onChange={setVideoThumb}
+                onChange={(url, mediaId) => {
+                  setVideoThumb(url);
+                  if (mediaId) setVideoThumbMediaId(mediaId);
+                }}
                 aspectRatio="16/9"
                 placeholder="Choose Thumbnail Photo or Drag & Drop"
               />
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">
+                    Duration (e.g. 0:45)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="0:45"
+                    value={videoDuration}
+                    onChange={(e) => setVideoDuration(e.target.value)}
+                    className={`w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none ${
+                      theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'
+                    }`}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">
+                    Views Count Label (e.g. 10K views)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="10K views"
+                    value={videoViewsLabel}
+                    onChange={(e) => setVideoViewsLabel(e.target.value)}
+                    className={`w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none ${
+                      theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'
+                    }`}
+                  />
+                </div>
+              </div>
 
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
                 <button
@@ -1387,7 +1813,8 @@ export const HomePageView: React.FC<HomePageViewProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 text-xs sm:text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-[4px] shadow-xs cursor-pointer"
+                  disabled={createVideoMutation.isPending || updateVideoMutation.isPending}
+                  className="px-5 py-2 text-xs sm:text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-[4px] shadow-xs cursor-pointer disabled:opacity-50"
                 >
                   {editingVideo ? 'Save Video' : 'Add to Slider'}
                 </button>
@@ -1500,13 +1927,24 @@ export const HomePageView: React.FC<HomePageViewProps> = ({
                 </div>
               </div>
 
+              <ImageUploadField
+                label="Destination Hero Banner (4:3) *"
+                value={destHeroUrl}
+                onChange={(url, mediaId) => {
+                  setDestHeroUrl(url);
+                  if (mediaId) setDestHeroMediaId(mediaId);
+                }}
+                aspectRatio="4/3"
+                placeholder="Choose Destination Photo or Drag & Drop"
+              />
+
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">
                   Activities Label
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. 08 Activities"
+                  placeholder="e.g. 15+ Tours, Trekking & Shikara"
                   value={destActivitiesLabel}
                   onChange={(e) => setDestActivitiesLabel(e.target.value)}
                   className={`w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none ${
@@ -1517,50 +1955,42 @@ export const HomePageView: React.FC<HomePageViewProps> = ({
 
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">
-                  Summary
+                  Destination Summary / Tagline
                 </label>
                 <textarea
                   rows={2}
-                  placeholder="Short description of this destination..."
+                  placeholder="Brief highlight of the destination..."
                   value={destSummary}
                   onChange={(e) => setDestSummary(e.target.value)}
-                  className={`w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none resize-none ${
+                  className={`w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none ${
                     theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'
                   }`}
                 />
               </div>
 
-              <ImageUploadField
-                label="Destination Hero Photo"
-                value={destHeroUrl}
-                onChange={(url, mediaId) => {
-                  setDestHeroUrl(url);
-                  if (mediaId) setDestHeroMediaId(mediaId);
-                }}
-                purpose="destination"
-                aspectRatio="16/9"
-                placeholder="Choose Hero Photo or Drag & Drop"
-              />
-
               <div className="flex flex-wrap items-center gap-6 pt-2">
-                <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold">
+                <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={destIsFeatured}
                     onChange={(e) => setDestIsFeatured(e.target.checked)}
-                    className="w-4 h-4 rounded text-blue-600"
+                    className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500"
                   />
-                  <span>Featured on Home Page</span>
+                  <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    Featured Destination (Home Page Carousel)
+                  </span>
                 </label>
 
-                <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold">
+                <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={destIsVendorTerritory}
                     onChange={(e) => setDestIsVendorTerritory(e.target.checked)}
-                    className="w-4 h-4 rounded text-blue-600"
+                    className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500"
                   />
-                  <span>Vendor Territory</span>
+                  <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    Vendor Partner Territory
+                  </span>
                 </label>
               </div>
 
@@ -1588,7 +2018,7 @@ export const HomePageView: React.FC<HomePageViewProps> = ({
       {isThemeModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div
-            className={`w-full max-w-lg rounded-[4px] border shadow-2xl p-6 ${
+            className={`w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-[4px] border shadow-2xl p-6 ${
               theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-900'
             }`}
           >
@@ -1616,36 +2046,33 @@ export const HomePageView: React.FC<HomePageViewProps> = ({
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Honeymoon & Romantic Getaways"
+                  placeholder="e.g. Honeymoon Special, Wildlife Safari"
                   value={themeName}
                   onChange={(e) => setThemeName(e.target.value)}
                   className={`w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none font-semibold ${
-                    theme === 'dark'
-                      ? 'bg-slate-800 border-slate-700 text-white'
-                      : 'bg-slate-50 border-slate-200 text-slate-900'
+                    theme === 'dark' ? 'bg-slate-800 border-slate-700 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'
                   }`}
                 />
               </div>
 
               <ImageUploadField
-                label="Theme Photo"
+                label="Theme Cover Photo (4:3) *"
                 value={themePhoto}
                 onChange={(url, mediaId) => {
                   setThemePhoto(url);
                   if (mediaId) setThemePhotoMediaId(mediaId);
                 }}
-                purpose="theme"
-                aspectRatio="16/9"
+                aspectRatio="4/3"
                 placeholder="Choose Theme Photo or Drag & Drop"
               />
 
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">
-                  Target Destination URL Link
+                  Custom Destination URL (Optional)
                 </label>
                 <input
                   type="text"
-                  placeholder="/tour-packages?theme=honeymoon or https://..."
+                  placeholder="Default: /tour-packages?theme=<slug>"
                   value={themeLink}
                   onChange={(e) => setThemeLink(e.target.value)}
                   className={`w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none font-mono text-blue-600 dark:text-blue-400 ${
@@ -1678,7 +2105,7 @@ export const HomePageView: React.FC<HomePageViewProps> = ({
       {isFaqModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div
-            className={`w-full max-w-lg rounded-[4px] border shadow-2xl p-6 ${
+            className={`w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-[4px] border shadow-2xl p-6 ${
               theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-900'
             }`}
           >
@@ -1699,24 +2126,44 @@ export const HomePageView: React.FC<HomePageViewProps> = ({
             </div>
 
             <form onSubmit={handleSaveFaq} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">
-                  FAQ Category
-                </label>
-                <select
-                  value={faqCategory}
-                  onChange={(e) => setFaqCategory(e.target.value as HomePageFaq['category'])}
-                  className={`w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none font-semibold ${
-                    theme === 'dark'
-                      ? 'bg-slate-800 border-slate-700 text-white'
-                      : 'bg-slate-50 border-slate-200 text-slate-900'
-                  }`}
-                >
-                  <option value="General">General</option>
-                  <option value="Booking & Payments">Booking & Payments</option>
-                  <option value="Cancellation & Refund">Cancellation & Refund</option>
-                  <option value="Permits & Travel Guidelines">Permits & Travel Guidelines</option>
-                </select>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">
+                    FAQ Scope *
+                  </label>
+                  <select
+                    value={faqScope}
+                    onChange={(e) => setFaqScope(e.target.value as FaqScope)}
+                    className={`w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none font-semibold ${
+                      theme === 'dark'
+                        ? 'bg-slate-800 border-slate-700 text-white'
+                        : 'bg-slate-50 border-slate-200 text-slate-900'
+                    }`}
+                  >
+                    <option value="general">General Site</option>
+                    <option value="contact">Contact Us Page</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">
+                    FAQ Category *
+                  </label>
+                  <select
+                    value={faqCategory}
+                    onChange={(e) => setFaqCategory(e.target.value as FaqCategory)}
+                    className={`w-full p-2.5 text-xs sm:text-sm rounded-[4px] border outline-none font-semibold ${
+                      theme === 'dark'
+                        ? 'bg-slate-800 border-slate-700 text-white'
+                        : 'bg-slate-50 border-slate-200 text-slate-900'
+                    }`}
+                  >
+                    <option value="general">General</option>
+                    <option value="booking_payments">Booking &amp; Payments</option>
+                    <option value="cancellation_refund">Cancellation &amp; Refund</option>
+                    <option value="permits_guidelines">Permits &amp; Travel Guidelines</option>
+                  </select>
+                </div>
               </div>
 
               <div>
@@ -1763,7 +2210,8 @@ export const HomePageView: React.FC<HomePageViewProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 text-xs sm:text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-[4px] shadow-xs cursor-pointer"
+                  disabled={createFaqMutation.isPending || updateFaqMutation.isPending}
+                  className="px-5 py-2 text-xs sm:text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-[4px] shadow-xs cursor-pointer disabled:opacity-50"
                 >
                   {editingFaq ? 'Save Changes' : 'Publish FAQ'}
                 </button>
