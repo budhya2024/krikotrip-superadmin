@@ -28,12 +28,21 @@ import type { BlogPost } from '../../types';
 import { useTheme } from '../../context/ThemeContext';
 import { SUPPORTED_DESTINATIONS, getDestinationBadgeStyle } from './VendorPortalView';
 import { ImageUploadField } from '../common/ImageUploadField';
+import { useAdminBlogCategoriesQuery, useAdminBlogDetailQuery } from '../../api/blogs';
+import { useDestinationsQuery } from '../../api/destinations';
+
+export interface SavedArticlePayload extends BlogPost {
+  coverMediaId?: string;
+  authorAvatarMediaId?: string | null;
+  categoryId?: string;
+  destinationId?: string | null;
+}
 
 interface ArticleEditorModalProps {
   isOpen: boolean;
   onClose: () => void;
-  article: BlogPost | null; // null = writing a new article, non-null = editing
-  onSave: (article: BlogPost) => void;
+  article: BlogPost | null;
+  onSave: (article: SavedArticlePayload) => void;
 }
 
 export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
@@ -44,47 +53,63 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
 }) => {
   const { theme } = useTheme();
 
-  // Active Tab: Content & WordPress Editor vs SEO vs Live Preview
-  const [activeTab, setActiveTab] = useState<'content' | 'seo' | 'preview'>('content');
+  const { data: detailData } = useAdminBlogDetailQuery(article?.id);
+  const { data: adminCategories } = useAdminBlogCategoriesQuery();
+  const { data: destinationsData } = useDestinationsQuery();
 
-  // Textarea Ref for WordPress-style cursor selection formatting
+  const [activeTab, setActiveTab] = useState<'content' | 'seo' | 'preview'>('content');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Form Fields: Core Article Info
   const [title, setTitle] = useState('');
   const [slug, setSlug] = useState('');
   const [author, setAuthor] = useState('Admin');
   const [authorAvatar, setAuthorAvatar] = useState(
     'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80'
   );
+  const [authorAvatarMediaId, setAuthorAvatarMediaId] = useState<string | null>(null);
   const [category, setCategory] = useState('Travel Guide');
+  const [categoryId, setCategoryId] = useState('');
   const [destination, setDestination] = useState<string>('Kashmir');
+  const [destinationId, setDestinationId] = useState<string | null>(null);
   const [status, setStatus] = useState<BlogPost['status']>('Published');
   const [readTime, setReadTime] = useState('5 min read');
   const [coverImage, setCoverImage] = useState(
     'https://images.unsplash.com/photo-1595815771614-ade9d652a65d?auto=format&fit=crop&w=800&q=80'
   );
+  const [coverMediaId, setCoverMediaId] = useState<string>('');
   const [coverImageAlt, setCoverImageAlt] = useState('');
   const [excerpt, setExcerpt] = useState('');
   const [content, setContent] = useState('');
 
-  // Tags Management
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
 
-  // SEO Management
   const [seoTitle, setSeoTitle] = useState('');
   const [metaDescription, setMetaDescription] = useState('');
   const [canonicalUrl, setCanonicalUrl] = useState('');
   const [focusKeywords, setFocusKeywords] = useState<string[]>([]);
   const [keywordInput, setKeywordInput] = useState('');
 
-  // Link Inserter Modal State
   const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
   const [linkText, setLinkText] = useState('');
   const [linkUrl, setLinkUrl] = useState('');
 
-  // Populate or Reset when article changes
+  useEffect(() => {
+    if (detailData) {
+      if (detailData.contentMarkdown) setContent(detailData.contentMarkdown);
+      if (detailData.coverMediaId) setCoverMediaId(detailData.coverMediaId);
+      if (detailData.authorAvatarMediaId) setAuthorAvatarMediaId(detailData.authorAvatarMediaId);
+      if (detailData.category?.id) {
+        setCategoryId(detailData.category.id);
+        setCategory(detailData.category.name);
+      }
+      if (detailData.destination?.id) {
+        setDestinationId(detailData.destination.id);
+        setDestination(detailData.destination.name);
+      }
+    }
+  }, [detailData]);
+
   useEffect(() => {
     if (article) {
       setTitle(article.title || '');
@@ -111,7 +136,6 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
       setCanonicalUrl(article.canonicalUrl || `https://krikotrip.com/blog/${article.slug || ''}`);
       setFocusKeywords(article.focusKeywords || ['travel guide', 'krikotrip holiday']);
     } else {
-      // New Article Defaults
       setTitle('');
       setSlug('');
       setAuthor('KrikoTrip Super Admin');
@@ -139,7 +163,6 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
     setActiveTab('content');
   }, [article, isOpen]);
 
-  // Helper: auto-generate URL slug
   function generateSlug(text: string): string {
     return text
       .toLowerCase()
@@ -149,7 +172,6 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
       .replace(/^-+|-+$/g, '');
   }
 
-  // Handle title change and auto-slug
   const handleTitleChange = (val: string) => {
     setTitle(val);
     if (!article || !article.slug) {
@@ -160,7 +182,6 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
     }
   };
 
-  // Tag Management Helpers
   const handleAddTag = () => {
     const trimmed = tagInput.trim();
     if (!trimmed) return;
@@ -181,7 +202,6 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
     }
   };
 
-  // Keyword Helpers
   const handleAddKeyword = () => {
     const trimmed = keywordInput.trim();
     if (!trimmed) return;
@@ -195,7 +215,6 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
     setFocusKeywords(focusKeywords.filter((k) => k !== kwToRemove));
   };
 
-  // WordPress-style Text Formatting Engine
   const applyFormatting = (formatType: string, customText?: string, customUrl?: string) => {
     const textarea = textareaRef.current;
     if (!textarea) return;
@@ -303,7 +322,6 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
     setIsLinkModalOpen(false);
   };
 
-  // Quick Preset Photos
   const presetPhotos = [
     {
       name: 'Kashmir Shikara',
@@ -360,7 +378,13 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
 
     const finalSlug = slug.trim() || generateSlug(title);
 
-    const savedArticle: BlogPost = {
+    const matchedCat = adminCategories?.find((c) => c.name.toLowerCase() === category.toLowerCase() || c.id === categoryId);
+    const finalCategoryId = matchedCat?.id || categoryId || adminCategories?.[0]?.id || '';
+
+    const matchedDest = destinationsData?.find((d) => d.name.toLowerCase() === destination.toLowerCase() || d.id === destinationId);
+    const finalDestinationId = matchedDest?.id || destinationId || null;
+
+    const savedArticle: SavedArticlePayload = {
       id: article?.id || `blog-${Date.now()}`,
       title: title.trim(),
       slug: finalSlug,
@@ -381,13 +405,16 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
       metaDescription: metaDescription.trim() || excerpt || title,
       canonicalUrl: canonicalUrl.trim() || `https://krikotrip.com/blog/${finalSlug}`,
       focusKeywords: focusKeywords.length > 0 ? focusKeywords : ['travel guide'],
+      coverMediaId: coverMediaId || detailData?.coverMediaId || undefined,
+      authorAvatarMediaId: authorAvatarMediaId || detailData?.authorAvatarMediaId || null,
+      categoryId: finalCategoryId,
+      destinationId: finalDestinationId,
     };
 
     onSave(savedArticle);
     onClose();
   };
 
-  // Safe Inline Markdown Parser for WordPress preview
   const parseInlineMarkdown = (text: string): React.ReactNode => {
     const regex = /(\[([^\]]+)\]\(([^)]+)\)|\*\*([^*]+)\*\*|\*([^*]+)\*|`([^`]+)`)/g;
     const parts: React.ReactNode[] = [];
@@ -445,7 +472,6 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
     return parts.length > 0 ? parts : text;
   };
 
-  // Formatted content renderer for live reading view
   const renderFormattedStory = (rawText: string) => {
     if (!rawText.trim()) {
       return <p className="text-slate-400 italic">No article content written yet...</p>;
@@ -580,7 +606,6 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
 
   return (
     <div className="space-y-4 animate-fadeIn">
-      {/* TOP BREADCRUMBS & ACTION BAR */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-200 dark:border-slate-800">
         <div className="flex items-center gap-2 flex-wrap">
           <button
@@ -605,7 +630,6 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Status Selector */}
           <select
             value={status}
             onChange={(e) => setStatus(e.target.value as BlogPost['status'])}
@@ -639,12 +663,10 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
         </div>
       </div>
 
-      {/* MAIN CARD CONTAINER */}
       <div
         className={`w-full rounded-[4px] border shadow-xs overflow-hidden ${theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-900'
           }`}
       >
-        {/* HEADER BAR */}
         <div
           className={`px-5 py-4 border-b flex items-center justify-between ${theme === 'dark' ? 'border-slate-800 bg-slate-900/90' : 'border-slate-200 bg-slate-50/90'
             }`}
@@ -675,7 +697,6 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
           </div>
         </div>
 
-        {/* NAVIGATION TABS */}
         <div className="flex items-center gap-1 px-5 border-b border-slate-200 dark:border-slate-800 select-none bg-slate-50/50 dark:bg-slate-900/50 text-xs font-semibold overflow-x-auto">
           <button
             type="button"
@@ -717,13 +738,10 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
           </button>
         </div>
 
-        {/* TAB 1: ARTICLE CONTENT & WORDPRESS RICH TEXT EDITOR */}
         <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-6">
           {activeTab === 'content' && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Left Column: Headline, WordPress Toolbar, Content & Cover (2 cols) */}
               <div className="lg:col-span-2 space-y-5">
-                {/* Article Headline */}
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1.5">
                     Article Title / Headline *
@@ -741,7 +759,6 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
                   />
                 </div>
 
-                {/* Article Slug / Permalink */}
                 <div>
                   <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1 flex items-center justify-between">
                     <span className="flex items-center gap-1.5">
@@ -774,7 +791,6 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
                   </div>
                 </div>
 
-                {/* Excerpt / Short Summary */}
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">
                     Article Summary / Excerpt *
@@ -792,9 +808,7 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
                   />
                 </div>
 
-                {/* WORDPRESS-STYLE RICH EDITOR CONTAINER */}
                 <div className="border border-slate-200 dark:border-slate-700 rounded-[4px] overflow-hidden shadow-xs">
-                  {/* WordPress Toolbar Header */}
                   <div
                     className={`p-2 border-b flex items-center justify-between gap-1 flex-wrap ${theme === 'dark' ? 'bg-slate-800/90 border-slate-700' : 'bg-slate-100/90 border-slate-200'
                       }`}
@@ -804,7 +818,6 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
                         Tools:
                       </span>
 
-                      {/* Bold Text */}
                       <button
                         type="button"
                         onClick={() => applyFormatting('bold')}
@@ -814,7 +827,6 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
                         <Bold className="w-4 h-4" />
                       </button>
 
-                      {/* Italic Text */}
                       <button
                         type="button"
                         onClick={() => applyFormatting('italic')}
@@ -826,7 +838,6 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
 
                       <div className="w-[1px] h-5 bg-slate-300 dark:bg-slate-600 mx-1"></div>
 
-                      {/* Heading 2 */}
                       <button
                         type="button"
                         onClick={() => applyFormatting('h2')}
@@ -837,7 +848,6 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
                         <span>H2</span>
                       </button>
 
-                      {/* Heading 3 */}
                       <button
                         type="button"
                         onClick={() => applyFormatting('h3')}
@@ -850,7 +860,6 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
 
                       <div className="w-[1px] h-5 bg-slate-300 dark:bg-slate-600 mx-1"></div>
 
-                      {/* Bullet List */}
                       <button
                         type="button"
                         onClick={() => applyFormatting('bullet')}
@@ -860,7 +869,6 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
                         <List className="w-4 h-4" />
                       </button>
 
-                      {/* Numbered List */}
                       <button
                         type="button"
                         onClick={() => applyFormatting('number')}
@@ -872,7 +880,6 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
 
                       <div className="w-[1px] h-5 bg-slate-300 dark:bg-slate-600 mx-1"></div>
 
-                      {/* Add Link */}
                       <button
                         type="button"
                         onClick={handleOpenLinkModal}
@@ -883,7 +890,6 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
                         <span>Link</span>
                       </button>
 
-                      {/* Quote */}
                       <button
                         type="button"
                         onClick={() => applyFormatting('quote')}
@@ -893,7 +899,6 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
                         <Quote className="w-4 h-4" />
                       </button>
 
-                      {/* Code */}
                       <button
                         type="button"
                         onClick={() => applyFormatting('code')}
@@ -903,7 +908,6 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
                         <Code className="w-4 h-4" />
                       </button>
 
-                      {/* Divider / HR */}
                       <button
                         type="button"
                         onClick={() => applyFormatting('hr')}
@@ -921,7 +925,6 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
                     </div>
                   </div>
 
-                  {/* Textarea Editor */}
                   <textarea
                     ref={textareaRef}
                     rows={14}
@@ -936,7 +939,6 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
                   />
                 </div>
 
-                {/* Cover Photo / Image Section */}
                 <div
                   className={`p-4 rounded-[4px] border space-y-3 ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'
                     }`}
@@ -952,8 +954,14 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
                   <div className="space-y-3">
                     <ImageUploadField
                       value={coverImage}
-                      onChange={setCoverImage}
+                      onChange={(val, mediaId) => {
+                        setCoverImage(val);
+                        if (mediaId) {
+                          setCoverMediaId(mediaId);
+                        }
+                      }}
                       aspectRatio="16/9"
+                      purpose="blog_cover"
                       placeholder="Choose Cover Image or Drag & Drop"
                     />
 
@@ -967,7 +975,6 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
                         : 'bg-white border-slate-200 text-slate-900'
                         }`}
                     />
-                    {/* Quick Preset Photos */}
                     <div className="flex items-center gap-1.5 flex-wrap pt-1">
                       <span className="text-[10px] text-slate-400">Quick Presets:</span>
                       {presetPhotos.map((p) => (
@@ -988,9 +995,7 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
                 </div>
               </div>
 
-              {/* Right Column: Publishing Info & WordPress Tag List System (1 col) */}
               <div className="space-y-4">
-                {/* Meta Attributes Panel */}
                 <div
                   className={`p-4 rounded-[4px] border space-y-3.5 ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'
                     }`}
@@ -999,7 +1004,6 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
                     Publishing & Author Info
                   </h4>
 
-                  {/* Author Name */}
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
                       Author Byline
@@ -1022,49 +1026,68 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
                     </div>
                   </div>
 
-                  {/* Category Dropdown */}
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
                       Article Category
                     </label>
                     <select
                       value={category}
-                      onChange={(e) => setCategory(e.target.value)}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setCategory(val);
+                        const found = adminCategories?.find((c) => c.name === val);
+                        if (found) setCategoryId(found.id);
+                      }}
                       className={`w-full px-2.5 py-1.5 text-xs font-semibold rounded-[4px] border outline-none cursor-pointer ${theme === 'dark'
                         ? 'bg-slate-800 border-slate-700 text-white'
                         : 'bg-white border-slate-200 text-slate-900'
                         }`}
                     >
-                      {categories.map((c) => (
-                        <option key={c} value={c}>
-                          {c}
-                        </option>
-                      ))}
+                      {adminCategories && adminCategories.length > 0
+                        ? adminCategories.map((c) => (
+                            <option key={c.id} value={c.name}>
+                              {c.name}
+                            </option>
+                          ))
+                        : categories.map((c) => (
+                            <option key={c} value={c}>
+                              {c}
+                            </option>
+                          ))}
                     </select>
                   </div>
 
-                  {/* Destination Dropdown */}
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
                       Target Destination Territory
                     </label>
                     <select
                       value={destination}
-                      onChange={(e) => setDestination(e.target.value)}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setDestination(val);
+                        const found = destinationsData?.find((d) => d.name === val);
+                        if (found) setDestinationId(found.id);
+                      }}
                       className={`w-full px-2.5 py-1.5 text-xs font-semibold rounded-[4px] border outline-none cursor-pointer ${theme === 'dark'
                         ? 'bg-slate-800 border-slate-700 text-white'
                         : 'bg-white border-slate-200 text-slate-900'
                         }`}
                     >
-                      {SUPPORTED_DESTINATIONS.map((d) => (
-                        <option key={d} value={d}>
-                          {d} Territory
-                        </option>
-                      ))}
+                      {destinationsData && destinationsData.length > 0
+                        ? destinationsData.map((d) => (
+                            <option key={d.id} value={d.name}>
+                              {d.name} Territory
+                            </option>
+                          ))
+                        : SUPPORTED_DESTINATIONS.map((d) => (
+                            <option key={d} value={d}>
+                              {d} Territory
+                            </option>
+                          ))}
                     </select>
                   </div>
 
-                  {/* Read Time */}
                   <div>
                     <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
                       Estimated Reading Time
@@ -1082,7 +1105,6 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
                   </div>
                 </div>
 
-                {/* WORDPRESS TAG LIST MANAGEMENT SYSTEM */}
                 <div
                   className={`p-4 rounded-[4px] border space-y-3 ${theme === 'dark' ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50 border-slate-200'
                     }`}
@@ -1097,7 +1119,6 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
                     </span>
                   </div>
 
-                  {/* Tag Input Field with Enter key & Add button */}
                   <div className="flex items-center gap-1.5">
                     <input
                       type="text"
@@ -1125,7 +1146,6 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
                     </button>
                   </div>
 
-                  {/* Active Tags List Chips */}
                   <div className="flex items-center gap-1.5 flex-wrap min-h-[38px] p-2 bg-white dark:bg-slate-900 rounded-[4px] border border-slate-200 dark:border-slate-700">
                     {tags.length === 0 ? (
                       <span className="text-[11px] text-slate-400 italic">No tags added yet. Type a tag above.</span>
@@ -1149,7 +1169,6 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
                     )}
                   </div>
 
-                  {/* Suggested Popular Tags Cloud */}
                   <div>
                     <span className="text-[10px] font-semibold text-slate-400 block mb-1.5 uppercase tracking-wider">
                       Quick Suggested Tags:
@@ -1178,10 +1197,8 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
             </div>
           )}
 
-          {/* TAB 2: SEO & GOOGLE SEARCH METADATA */}
           {activeTab === 'seo' && (
             <div className="space-y-6">
-              {/* Google SERP Snippet Preview */}
               <div
                 className={`p-4 sm:p-5 rounded-[4px] border ${theme === 'dark' ? 'bg-slate-800/60 border-slate-700' : 'bg-slate-50 border-slate-200'
                   }`}
@@ -1196,7 +1213,6 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
                   <span className="text-[11px] text-slate-400">Desktop & Mobile SERP</span>
                 </div>
 
-                {/* Google Card Simulation */}
                 <div className="p-4 bg-white dark:bg-slate-900 rounded-[4px] border border-slate-200 dark:border-slate-800 shadow-xs max-w-2xl">
                   <div className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-400 mb-1">
                     <Globe className="w-3.5 h-3.5 text-blue-500" />
@@ -1215,7 +1231,6 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
                 </div>
               </div>
 
-              {/* SEO Title Input */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
@@ -1240,7 +1255,6 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
                 />
               </div>
 
-              {/* Meta Description Input */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
@@ -1265,7 +1279,6 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
                 />
               </div>
 
-              {/* Canonical URL & Focus Keywords */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">
@@ -1315,7 +1328,6 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
                 </div>
               </div>
 
-              {/* Focus Keywords Pills */}
               <div>
                 <span className="text-[11px] font-semibold text-slate-400 block mb-1">
                   Active Focus Keywords ({focusKeywords.length})
@@ -1341,7 +1353,6 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
             </div>
           )}
 
-          {/* TAB 3: LIVE ARTICLE READER PREVIEW */}
           {activeTab === 'preview' && (
             <div className="max-w-3xl mx-auto space-y-6 py-2">
               <div className="flex items-center gap-2">
@@ -1361,12 +1372,10 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
                 </span>
               </div>
 
-              {/* Title */}
               <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white leading-tight">
                 {title || 'Untitled Travel Article'}
               </h1>
 
-              {/* Author & Date Bar */}
               <div className="flex items-center gap-3 py-2 border-y border-slate-100 dark:border-slate-800 text-xs text-slate-500">
                 <img
                   src={authorAvatar}
@@ -1379,7 +1388,6 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
                 </div>
               </div>
 
-              {/* Featured Cover Image */}
               {coverImage && (
                 <div className="rounded-[4px] overflow-hidden border border-slate-200 dark:border-slate-800 h-64 sm:h-80">
                   <img
@@ -1390,17 +1398,14 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
                 </div>
               )}
 
-              {/* Excerpt Lead Paragraph */}
               <p className="text-sm sm:text-base font-medium text-slate-700 dark:text-slate-300 italic leading-relaxed border-l-4 border-blue-600 pl-4 bg-slate-50 dark:bg-slate-800/40 py-2 rounded-r-[4px]">
                 {excerpt || 'Article summary excerpt...'}
               </p>
 
-              {/* Rendered Body with WordPress Headings, Bullets, Numbers, Bold, Links */}
               <div className="text-sm text-slate-800 dark:text-slate-200 leading-relaxed font-sans space-y-1">
                 {renderFormattedStory(content)}
               </div>
 
-              {/* Tags Section */}
               <div className="pt-4 border-t border-slate-200 dark:border-slate-800 flex items-center gap-2 flex-wrap">
                 <span className="text-xs font-semibold text-slate-400">Tags:</span>
                 {tags.map((t) => (
@@ -1415,7 +1420,6 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
             </div>
           )}
 
-          {/* BOTTOM ACTIONS BAR */}
           <div className="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-800">
             <div className="flex items-center gap-2 text-xs text-slate-400">
               <LinkIcon className="w-3.5 h-3.5 text-blue-500" />
@@ -1444,7 +1448,6 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
         </form>
       </div>
 
-      {/* INTERACTIVE LINK INSERTION MODAL */}
       {isLinkModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs">
           <div

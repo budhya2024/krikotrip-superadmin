@@ -17,34 +17,91 @@ import {
 import type { BlogPost } from '../../types';
 import { useTheme } from '../../context/ThemeContext';
 import { DeleteConfirmModal } from '../common/DeleteConfirmModal';
-import { ArticleEditorModal } from './ArticleEditorModal';
+import { ArticleEditorModal, type SavedArticlePayload } from './ArticleEditorModal';
+import {
+  useAdminBlogsQuery,
+  useCreateBlogMutation,
+  useUpdateBlogMutation,
+  usePatchBlogStatusMutation,
+  useDeleteBlogMutation,
+  type AdminBlogListItem,
+  type CreateBlogPostInput,
+  type UpdateBlogPostInput,
+} from '../../api/blogs';
 
-interface BlogViewProps {
-  blogs: BlogPost[];
-  onAddBlog: (blog: BlogPost) => void;
+export interface BlogViewProps {
+  blogs?: BlogPost[];
+  onAddBlog?: (blog: BlogPost) => void;
   onUpdateBlog?: (blog: BlogPost) => void;
-  onDeleteBlog: (id: string) => void;
+  onDeleteBlog?: (id: string) => void;
 }
 
+const mapAdminBlogToBlogPost = (item: AdminBlogListItem): BlogPost => {
+  const statusMap: Record<AdminBlogListItem['status'], BlogPost['status']> = {
+    published: 'Published',
+    draft: 'Draft',
+    scheduled: 'Scheduled',
+  };
+  const publishedDate = item.publishedAt
+    ? new Date(item.publishedAt).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      })
+    : 'Draft';
+
+  return {
+    id: item.id,
+    title: item.title,
+    slug: item.slug,
+    author: item.author.name,
+    authorAvatar: item.author.avatarUrl || undefined,
+    category: item.category.name,
+    destination: item.destination?.name || undefined,
+    publishedDate,
+    views: item.viewsCount,
+    readTime: `${item.readTimeMinutes} min read`,
+    status: statusMap[item.status] || 'Draft',
+    coverImage: item.coverUrl,
+    coverImageAlt: item.coverAlt || undefined,
+    excerpt: item.excerpt,
+    tags: item.tags,
+    seoTitle: item.seoTitle || undefined,
+    metaDescription: item.metaDescription || undefined,
+    canonicalUrl: item.canonicalUrl || undefined,
+    focusKeywords: item.focusKeywords,
+  };
+};
+
 export const BlogView: React.FC<BlogViewProps> = ({
-  blogs,
+  blogs: propBlogs,
   onAddBlog,
   onUpdateBlog,
   onDeleteBlog,
 }) => {
   const { theme } = useTheme();
 
-  // Search & View Mode States
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
 
-  // Article Editor Modal State (Used for both Write & Edit)
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [editingArticle, setEditingArticle] = useState<BlogPost | null>(null);
   const [deleteTargetBlog, setDeleteTargetBlog] = useState<BlogPost | null>(null);
 
-  // Filtering Logic
-  const filteredBlogs = blogs.filter((b) => {
+  const { data: blogsResponse } = useAdminBlogsQuery({
+    q: searchQuery.trim() || undefined,
+  });
+
+  const createMutation = useCreateBlogMutation();
+  const updateMutation = useUpdateBlogMutation();
+  const patchStatusMutation = usePatchBlogStatusMutation();
+  const deleteMutation = useDeleteBlogMutation();
+
+  const activeBlogs: BlogPost[] = blogsResponse?.data
+    ? blogsResponse.data.map(mapAdminBlogToBlogPost)
+    : propBlogs || [];
+
+  const filteredBlogs = activeBlogs.filter((b) => {
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase();
     return (
@@ -55,7 +112,6 @@ export const BlogView: React.FC<BlogViewProps> = ({
     );
   });
 
-  // Handlers for Write & Edit
   const handleOpenWrite = () => {
     setEditingArticle(null);
     setIsEditorOpen(true);
@@ -66,26 +122,105 @@ export const BlogView: React.FC<BlogViewProps> = ({
     setIsEditorOpen(true);
   };
 
-  const handleSaveArticle = (savedArticle: BlogPost) => {
-    if (editingArticle) {
+  const handleSaveArticle = async (savedArticle: SavedArticlePayload) => {
+    const isEdit = Boolean(editingArticle && editingArticle.id);
+    const backendStatus: 'draft' | 'scheduled' | 'published' =
+      savedArticle.status === 'Published'
+        ? 'published'
+        : savedArticle.status === 'Scheduled'
+          ? 'scheduled'
+          : 'draft';
+
+    if (isEdit && editingArticle) {
+      const updatePayload: UpdateBlogPostInput = {
+        title: savedArticle.title,
+        slug: savedArticle.slug,
+        excerpt: savedArticle.excerpt,
+        contentMarkdown: savedArticle.content,
+        coverMediaId: savedArticle.coverMediaId,
+        coverAlt: savedArticle.coverImageAlt || null,
+        categoryId: savedArticle.categoryId || undefined,
+        destinationId: savedArticle.destinationId,
+        tags: savedArticle.tags,
+        authorName: savedArticle.author,
+        authorAvatarMediaId: savedArticle.authorAvatarMediaId,
+        status: backendStatus,
+        publishedAt: backendStatus === 'published' ? new Date().toISOString() : null,
+        seoTitle: savedArticle.seoTitle || null,
+        metaDescription: savedArticle.metaDescription || null,
+        canonicalUrl: savedArticle.canonicalUrl || null,
+        focusKeywords: savedArticle.focusKeywords,
+      };
+      await updateMutation.mutateAsync({ id: editingArticle.id, input: updatePayload });
       if (onUpdateBlog) {
         onUpdateBlog(savedArticle);
-      } else {
-        onAddBlog(savedArticle);
       }
     } else {
-      onAddBlog(savedArticle);
+      const fallbackCoverId =
+        savedArticle.coverMediaId || '00000000-0000-0000-0000-000000000001';
+      const createPayload: CreateBlogPostInput = {
+        title: savedArticle.title,
+        slug: savedArticle.slug,
+        excerpt: savedArticle.excerpt,
+        contentMarkdown: savedArticle.content || '',
+        coverMediaId: fallbackCoverId,
+        coverAlt: savedArticle.coverImageAlt || null,
+        categoryId: savedArticle.categoryId || '',
+        destinationId: savedArticle.destinationId,
+        tags: savedArticle.tags,
+        authorName: savedArticle.author,
+        authorAvatarMediaId: savedArticle.authorAvatarMediaId,
+        status: backendStatus,
+        publishedAt: backendStatus === 'published' ? new Date().toISOString() : null,
+        seoTitle: savedArticle.seoTitle || null,
+        metaDescription: savedArticle.metaDescription || null,
+        canonicalUrl: savedArticle.canonicalUrl || null,
+        focusKeywords: savedArticle.focusKeywords,
+      };
+      const created = await createMutation.mutateAsync(createPayload);
+      if (onAddBlog) {
+        onAddBlog({
+          ...savedArticle,
+          id: created.id,
+        });
+      }
     }
+    setIsEditorOpen(false);
+    setEditingArticle(null);
   };
 
-  const handleTogglePostStatus = (post: BlogPost) => {
+  const handleTogglePostStatus = async (post: BlogPost) => {
     const nextStatus: BlogPost['status'] = post.status === 'Published' ? 'Draft' : 'Published';
-    if (onUpdateBlog) {
-      onUpdateBlog({ ...post, status: nextStatus });
+    const backendStatus: 'draft' | 'published' = nextStatus === 'Published' ? 'published' : 'draft';
+    try {
+      await patchStatusMutation.mutateAsync({
+        id: post.id,
+        input: {
+          status: backendStatus,
+          publishedAt: backendStatus === 'published' ? new Date().toISOString() : null,
+        },
+      });
+      if (onUpdateBlog) {
+        onUpdateBlog({ ...post, status: nextStatus });
+      }
+    } catch {
+      if (onUpdateBlog) {
+        onUpdateBlog({ ...post, status: nextStatus });
+      }
     }
   };
 
-  // If user clicked "Write New Article" or "Edit Article", open the dedicated full page
+  const handleDeleteArticle = async (id: string) => {
+    try {
+      await deleteMutation.mutateAsync(id);
+    } finally {
+      if (onDeleteBlog) {
+        onDeleteBlog(id);
+      }
+      setDeleteTargetBlog(null);
+    }
+  };
+
   if (isEditorOpen) {
     return (
       <ArticleEditorModal
@@ -102,7 +237,6 @@ export const BlogView: React.FC<BlogViewProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Top Banner / Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
@@ -124,13 +258,11 @@ export const BlogView: React.FC<BlogViewProps> = ({
         </button>
       </div>
 
-      {/* Search & View Switcher Bar */}
       <div
         className={`p-4 rounded-[4px] border ${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
           }`}
       >
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          {/* Search Box */}
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             <input
@@ -145,7 +277,6 @@ export const BlogView: React.FC<BlogViewProps> = ({
             />
           </div>
 
-          {/* View Mode Toggle: Grid vs List & Clear Search */}
           <div className="flex items-center gap-2 self-end sm:self-auto">
             {searchQuery && (
               <button
@@ -159,7 +290,6 @@ export const BlogView: React.FC<BlogViewProps> = ({
               </button>
             )}
 
-            {/* View Mode Toggle: Grid vs List */}
             <div
               className={`flex items-center p-1 rounded-[4px] border ${theme === 'dark' ? 'bg-slate-800/80 border-slate-700' : 'bg-slate-100 border-slate-200'
                 }`}
@@ -191,13 +321,11 @@ export const BlogView: React.FC<BlogViewProps> = ({
         </div>
       </div>
 
-      {/* VIEW MODE OUTPUT: LIST VIEW VS GRID VIEW */}
       {viewMode === 'list' ? (
         <div
           className={`rounded-[4px] border overflow-hidden shadow-xs ${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
             }`}
         >
-          {/* Table Top Header Bar */}
           <div
             className={`px-4 py-3 border-b flex items-center justify-between gap-3 text-xs ${theme === 'dark' ? 'bg-slate-900/90 border-slate-800' : 'bg-slate-50 border-slate-200'
               }`}
@@ -255,12 +383,10 @@ export const BlogView: React.FC<BlogViewProps> = ({
                       key={post.id}
                       className="hover:bg-blue-50/30 dark:hover:bg-slate-800/40 transition-colors group"
                     >
-                      {/* 1. SL. NO. */}
                       <td className="py-3.5 pl-4 pr-3 whitespace-nowrap text-xs font-medium text-slate-400 dark:text-slate-500">
                         #{index + 1}
                       </td>
 
-                      {/* 2. ARTICLE / TITLE */}
                       <td className="py-3.5 px-3 whitespace-nowrap max-w-[320px]">
                         <div className="flex items-center gap-3">
                           <img
@@ -283,14 +409,12 @@ export const BlogView: React.FC<BlogViewProps> = ({
                         </div>
                       </td>
 
-                      {/* 3. CATEGORY */}
                       <td className="py-3.5 px-3 whitespace-nowrap">
                         <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
                           {post.category}
                         </span>
                       </td>
 
-                      {/* 4. DESTINATION */}
                       <td className="py-3.5 px-3 whitespace-nowrap">
                         {post.destination ? (
                           <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
@@ -301,7 +425,6 @@ export const BlogView: React.FC<BlogViewProps> = ({
                         )}
                       </td>
 
-                      {/* 5. AUTHOR */}
                       <td className="py-3.5 px-3 whitespace-nowrap">
                         <div className="flex items-center gap-2">
                           {post.authorAvatar ? (
@@ -321,7 +444,6 @@ export const BlogView: React.FC<BlogViewProps> = ({
                         </div>
                       </td>
 
-                      {/* 6. CREATED DATE */}
                       <td className="py-3.5 px-3 whitespace-nowrap">
                         <div className="flex items-center gap-1.5 text-xs text-slate-700 dark:text-slate-300 font-medium">
                           <Calendar className="w-3.5 h-3.5 text-slate-400" />
@@ -329,7 +451,6 @@ export const BlogView: React.FC<BlogViewProps> = ({
                         </div>
                       </td>
 
-                      {/* 7. STATUS TOGGLE BAR / SWITCH */}
                       <td className="py-3.5 px-3 whitespace-nowrap text-center">
                         <button
                           type="button"
@@ -357,7 +478,6 @@ export const BlogView: React.FC<BlogViewProps> = ({
                         </button>
                       </td>
 
-                      {/* 8. ACTIONS */}
                       <td className="py-3.5 pl-3 pr-4 whitespace-nowrap text-right">
                         <div className="flex items-center justify-end gap-1.5">
                           <button
@@ -385,7 +505,6 @@ export const BlogView: React.FC<BlogViewProps> = ({
             </table>
           </div>
 
-          {/* Table Bottom Pagination Bar */}
           <div
             className={`px-4 py-3 border-t flex flex-col sm:flex-row items-center justify-between gap-3 text-xs ${theme === 'dark' ? 'bg-slate-900/90 border-slate-800' : 'bg-slate-50 border-slate-200'
               }`}
@@ -393,7 +512,7 @@ export const BlogView: React.FC<BlogViewProps> = ({
             <div className="text-slate-500 text-xs">
               Showing <span className="font-bold text-slate-800 dark:text-slate-200">{filteredBlogs.length > 0 ? 1 : 0}</span> to{' '}
               <span className="font-bold text-slate-800 dark:text-slate-200">{filteredBlogs.length}</span> of{' '}
-              <span className="font-bold text-slate-800 dark:text-slate-200">{blogs.length}</span> articles
+              <span className="font-bold text-slate-800 dark:text-slate-200">{blogsResponse?.meta?.total ?? activeBlogs.length}</span> articles
             </div>
 
             <div className="flex items-center gap-1.5">
@@ -416,7 +535,6 @@ export const BlogView: React.FC<BlogViewProps> = ({
           </div>
         </div>
       ) : (
-        /* Article Cards Grid */
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
           {filteredBlogs.length === 0 ? (
             <div className="col-span-full py-12 text-center text-slate-400">
@@ -438,7 +556,6 @@ export const BlogView: React.FC<BlogViewProps> = ({
                   }`}
               >
                 <div>
-                  {/* Cover Photo - Clean Without Badges */}
                   <div className="relative h-44 overflow-hidden group">
                     <img
                       src={post.coverImage}
@@ -447,9 +564,7 @@ export const BlogView: React.FC<BlogViewProps> = ({
                     />
                   </div>
 
-                  {/* Article Info Body */}
                   <div className="p-4 space-y-2.5">
-                    {/* Category & Destination Header */}
                     <div className="flex items-center gap-2 text-[11px] font-semibold text-blue-600 dark:text-blue-400">
                       <span>{post.category}</span>
                       {post.destination && (
@@ -459,7 +574,7 @@ export const BlogView: React.FC<BlogViewProps> = ({
                         </>
                       )}
                     </div>
-                    {/* Author, Date & Reading Time */}
+
                     <div className="flex items-center justify-between text-xs text-slate-500 font-medium">
                       <div className="flex items-center gap-1.5">
                         {post.authorAvatar ? (
@@ -493,7 +608,6 @@ export const BlogView: React.FC<BlogViewProps> = ({
                       </div>
                     </div>
 
-                    {/* Title */}
                     <h3
                       onClick={() => handleOpenEdit(post)}
                       className="font-bold text-base text-slate-900 dark:text-white line-clamp-2 leading-snug hover:text-blue-600 cursor-pointer"
@@ -502,18 +616,15 @@ export const BlogView: React.FC<BlogViewProps> = ({
                       {post.title}
                     </h3>
 
-                    {/* Excerpt */}
                     <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2 leading-relaxed">
                       {post.excerpt}
                     </p>
 
-                    {/* Permalink Link Preview */}
                     <div className="flex items-center gap-1 text-[11px] text-blue-600 dark:text-blue-400 font-mono truncate">
                       <LinkIcon className="w-3 h-3 shrink-0" />
                       <span className="truncate">krikotrip.com/blog/{post.slug || post.id}</span>
                     </div>
 
-                    {/* Article Tags */}
                     {post.tags && post.tags.length > 0 && (
                       <div className="flex items-center gap-1.5 flex-wrap pt-1">
                         {post.tags.slice(0, 3).map((tag) => (
@@ -532,7 +643,6 @@ export const BlogView: React.FC<BlogViewProps> = ({
                       </div>
                     )}
 
-                    {/* SEO Status Indicator */}
                     {post.seoTitle && post.metaDescription && (
                       <div className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 pt-0.5">
                         <Globe className="w-3 h-3" />
@@ -542,9 +652,7 @@ export const BlogView: React.FC<BlogViewProps> = ({
                   </div>
                 </div>
 
-                {/* Card Footer: Status Bar on bottom site + Edit & Delete Actions */}
                 <div className="p-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                  {/* Status Bar / Toggle Switch */}
                   <button
                     type="button"
                     onClick={(e) => {
@@ -600,14 +708,12 @@ export const BlogView: React.FC<BlogViewProps> = ({
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
       <DeleteConfirmModal
         isOpen={!!deleteTargetBlog}
         onClose={() => setDeleteTargetBlog(null)}
         onConfirm={() => {
           if (deleteTargetBlog) {
-            onDeleteBlog(deleteTargetBlog.id);
-            setDeleteTargetBlog(null);
+            handleDeleteArticle(deleteTargetBlog.id);
           }
         }}
         itemType="Travel Article"

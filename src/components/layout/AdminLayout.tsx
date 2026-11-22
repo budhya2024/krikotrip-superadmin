@@ -6,7 +6,6 @@ import type {
   NavigationKey,
   Tour,
   BookingEnquiry,
-  BlogPost,
   ContactMessage,
   Vendor,
   TourReview,
@@ -14,7 +13,6 @@ import type {
 import {
   mockTours,
   mockEnquiries,
-  mockBlogs,
   mockContacts,
   mockVendors,
   mockReviews,
@@ -75,7 +73,6 @@ export const AdminLayout: React.FC = () => {
   const [tours, setTours] = useState<Tour[]>(mockTours);
   const [enquiries, setEnquiries] = useState<BookingEnquiry[]>(mockEnquiries);
   const [vendors, setVendors] = useState<Vendor[]>(mockVendors);
-  const [blogs, setBlogs] = useState<BlogPost[]>(mockBlogs);
   const [contacts, setContacts] = useState<ContactMessage[]>(mockContacts);
   const [reviews, setReviews] = useState<TourReview[]>(mockReviews);
 
@@ -195,23 +192,6 @@ export const AdminLayout: React.FC = () => {
     setVendors(vendors.filter((v) => v.id !== id));
   };
 
-  const handleAddBlog = (blogData: BlogPost | Omit<BlogPost, 'id' | 'views'>) => {
-    const newPost: BlogPost = {
-      ...blogData,
-      id: 'id' in blogData ? blogData.id : `BLG-${blogs.length + 1}`,
-      views: 'views' in blogData ? blogData.views : 1,
-    };
-    setBlogs([newPost, ...blogs]);
-  };
-
-  const handleUpdateBlog = (updatedBlog: BlogPost) => {
-    setBlogs(blogs.map((b) => (b.id === updatedBlog.id ? updatedBlog : b)));
-  };
-
-  const handleDeleteBlog = (id: string) => {
-    setBlogs(blogs.filter((b) => b.id !== id));
-  };
-
   const handleToggleContactReplied = (id: string) => {
     setContacts(
       contacts.map((c) => (c.id === id ? { ...c, status: c.status === 'Unread' ? 'Replied' : 'Unread' } : c))
@@ -321,14 +301,7 @@ export const AdminLayout: React.FC = () => {
           />
         );
       case 'blog':
-        return (
-          <BlogView
-            blogs={blogs}
-            onAddBlog={handleAddBlog}
-            onUpdateBlog={handleUpdateBlog}
-            onDeleteBlog={handleDeleteBlog}
-          />
-        );
+        return <BlogView />;
       case 'gallery':
         return <GalleryView />;
       case 'contact':
@@ -353,7 +326,6 @@ export const AdminLayout: React.FC = () => {
       className={`min-h-screen transition-colors duration-200 ${theme === 'dark' ? 'bg-slate-950 text-slate-100' : 'bg-slate-100/70 text-slate-900'
         }`}
     >
-      {/* Sidebar with 4px border radius and clean blue accents */}
       <Sidebar
         currentTab={currentTab}
         onSelectTab={handleSelectTab}
@@ -363,7 +335,6 @@ export const AdminLayout: React.FC = () => {
         onCloseMobile={() => setMobileSidebarOpen(false)}
       />
 
-      {/* Main Content Area */}
       <div
         className={`transition-all duration-200 min-h-screen flex flex-col min-w-0 ${isSidebarCollapsed ? 'lg:pl-18' : 'lg:pl-64'
           }`}

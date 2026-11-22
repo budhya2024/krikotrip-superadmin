@@ -41,6 +41,7 @@ export const queryKeys = {
   },
   blogs: {
     all: ['blogs'] as const,
+    categories: ['blogs', 'categories'] as const,
     list: (filters?: Record<string, unknown>) => ['blogs', 'list', filters] as const,
     detail: (slug: string) => ['blogs', 'detail', slug] as const,
   },
