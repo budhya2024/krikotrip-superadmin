@@ -209,6 +209,10 @@ export interface AgencySettings {
   bookingAutoConfirm: boolean;
   emailNotifications: boolean;
   smsAlerts: boolean;
+  autoApproveVerified?: boolean;
+  reviewConfig?: {
+    autoApproveVerified: boolean;
+  };
   socialLinks?: Record<string, string>;
   homeStats?: Array<{
     id?: string;

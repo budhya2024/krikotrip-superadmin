@@ -7,13 +7,11 @@ import type {
   Tour,
   BookingEnquiry,
   Vendor,
-  TourReview,
 } from '../../types';
 import {
   mockTours,
   mockEnquiries,
   mockVendors,
-  mockReviews,
 } from '../../data/mockData';
 import { DashboardView } from '../views/DashboardView';
 import { HomePageView } from '../views/HomePageView';
@@ -71,7 +69,6 @@ export const AdminLayout: React.FC = () => {
   const [tours, setTours] = useState<Tour[]>(mockTours);
   const [enquiries, setEnquiries] = useState<BookingEnquiry[]>(mockEnquiries);
   const [vendors, setVendors] = useState<Vendor[]>(mockVendors);
-  const [reviews, setReviews] = useState<TourReview[]>(mockReviews);
 
   const handleAddTour = (newTour: Tour) => {
     setTours([newTour, ...tours]);
@@ -139,42 +136,6 @@ export const AdminLayout: React.FC = () => {
     setVendors(vendors.filter((v) => v.id !== id));
   };
 
-  const handleAddReview = (newReview: TourReview) => {
-    setReviews([newReview, ...reviews]);
-  };
-
-  const handleUpdateReview = (updatedReview: TourReview) => {
-    setReviews(reviews.map((r) => (r.id === updatedReview.id ? updatedReview : r)));
-  };
-
-  const handleDeleteReview = (id: string) => {
-    setReviews(reviews.filter((r) => r.id !== id));
-  };
-
-  const handleToggleShowOnPackage = (id: string) => {
-    setReviews(
-      reviews.map((r) => (r.id === id ? { ...r, showOnPackage: !r.showOnPackage } : r))
-    );
-  };
-
-  const handleToggleShowOnHome = (id: string) => {
-    setReviews(
-      reviews.map((r) => (r.id === id ? { ...r, showOnHome: !r.showOnHome } : r))
-    );
-  };
-
-  const handleUpdateReviewStatus = (id: string, status: TourReview['status']) => {
-    setReviews(
-      reviews.map((r) => (r.id === id ? { ...r, status } : r))
-    );
-  };
-
-  const handleReplyToReview = (id: string, reply: string) => {
-    setReviews(
-      reviews.map((r) => (r.id === id ? { ...r, adminReply: reply } : r))
-    );
-  };
-
   const renderContent = () => {
     switch (currentTab) {
       case 'dashboard':
@@ -215,19 +176,7 @@ export const AdminLayout: React.FC = () => {
           />
         );
       case 'reviews':
-        return (
-          <ReviewsManagementView
-            reviews={reviews}
-            tours={tours}
-            onAddReview={handleAddReview}
-            onUpdateReview={handleUpdateReview}
-            onDeleteReview={handleDeleteReview}
-            onToggleShowOnPackage={handleToggleShowOnPackage}
-            onToggleShowOnHome={handleToggleShowOnHome}
-            onUpdateReviewStatus={handleUpdateReviewStatus}
-            onReplyToReview={handleReplyToReview}
-          />
-        );
+        return <ReviewsManagementView />;
       case 'blog':
         return <BlogView />;
       case 'gallery':

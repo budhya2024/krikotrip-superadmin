@@ -38,6 +38,7 @@ export const queryKeys = {
   reviews: {
     all: ['reviews'] as const,
     list: (filters?: Record<string, unknown>) => ['reviews', 'list', filters] as const,
+    detail: (id: string) => ['reviews', 'detail', id] as const,
   },
   blogs: {
     all: ['blogs'] as const,

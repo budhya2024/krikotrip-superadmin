@@ -70,6 +70,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
     bookingAutoConfirm: initialSettings?.bookingAutoConfirm ?? false,
     emailNotifications: initialSettings?.emailNotifications ?? true,
     smsAlerts: initialSettings?.smsAlerts ?? false,
+    autoApproveVerified: initialSettings?.reviewConfig?.autoApproveVerified ?? true,
     socialLinks: initialSettings?.socialLinks || {
       facebook: 'https://facebook.com/krikotrip',
       instagram: 'https://instagram.com/krikotrip',
@@ -115,6 +116,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         bookingAutoConfirm: serverSettings.bookingAutoConfirm,
         emailNotifications: serverSettings.emailNotifications,
         smsAlerts: serverSettings.smsAlerts,
+        autoApproveVerified: serverSettings.reviewConfig?.autoApproveVerified ?? true,
         socialLinks: serverSettings.socialLinks || {},
         homeStats: serverSettings.homeStats || [],
       });
@@ -351,6 +353,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
         bookingAutoConfirm: formData.bookingAutoConfirm,
         emailNotifications: formData.emailNotifications,
         smsAlerts: formData.smsAlerts,
+        reviewConfig: {
+          autoApproveVerified: Boolean(formData.autoApproveVerified),
+        },
         socialLinks: formData.socialLinks || {},
         homeStats: formData.homeStats || [],
       });
@@ -1160,6 +1165,23 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                       </span>
                       <span className="text-xs text-slate-500 block">
                         Enqueue automated email alerts to the support email address whenever a new guest enquiry or message arrives.
+                      </span>
+                    </div>
+                  </label>
+
+                  <label className="flex items-start gap-3 p-3 rounded-[4px] border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(formData.autoApproveVerified)}
+                      onChange={(e) => setFormData({ ...formData, autoApproveVerified: e.target.checked })}
+                      className="w-4 h-4 mt-0.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <div>
+                      <span className="text-xs sm:text-sm font-semibold text-slate-900 dark:text-white block">
+                        Auto-Approve Verified Reviews
+                      </span>
+                      <span className="text-xs text-slate-500 block">
+                        Automatically approve and publish reviews submitted by customers with verified completed bookings.
                       </span>
                     </div>
                   </label>
