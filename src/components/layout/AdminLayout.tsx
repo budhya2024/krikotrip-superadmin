@@ -15,6 +15,8 @@ import { ContactView } from '../views/ContactView';
 import { ChatbotView } from '../views/ChatbotView';
 import { SettingsView } from '../views/SettingsView';
 import { useTheme } from '../../context/ThemeContext';
+import { OfflineBanner } from '../common/OfflineBanner';
+import { ViewErrorBoundary } from '../common/RouteErrorBoundary';
 
 const validNavigationKeys: readonly NavigationKey[] = [
   'dashboard',
@@ -99,6 +101,7 @@ export const AdminLayout: React.FC = () => {
       className={`min-h-screen transition-colors duration-200 ${theme === 'dark' ? 'bg-slate-950 text-slate-100' : 'bg-slate-100/70 text-slate-900'
         }`}
     >
+      <OfflineBanner />
       <Sidebar
         currentTab={currentTab}
         onSelectTab={handleSelectTab}
@@ -120,7 +123,9 @@ export const AdminLayout: React.FC = () => {
         />
 
         <main className="flex-1 p-3 sm:p-5 lg:p-6 w-full min-w-0 max-w-[1720px] mx-auto">
-          {renderContent()}
+          <ViewErrorBoundary key={currentTab} viewName={currentTab}>
+            {renderContent()}
+          </ViewErrorBoundary>
         </main>
 
         <footer
