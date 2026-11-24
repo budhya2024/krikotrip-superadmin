@@ -94,5 +94,6 @@ export const queryKeys = {
   },
   auditLogs: {
     all: ['audit-logs'] as const,
+    list: (params?: unknown) => ['audit-logs', 'list', params] as const,
   },
 }
