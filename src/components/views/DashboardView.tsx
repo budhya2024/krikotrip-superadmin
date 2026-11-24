@@ -28,7 +28,7 @@ import {
   Pie,
   Cell,
 } from 'recharts';
-import type { NavigationKey, Tour, BookingEnquiry } from '../../types';
+import type { NavigationKey } from '../../types';
 import { useTheme } from '../../context/ThemeContext';
 import { DropdownFilter } from '../common/DropdownFilter';
 import {
@@ -39,11 +39,11 @@ import {
   type DashboardPeriod,
 } from '../../api/dashboard';
 import { useDestinationsQuery } from '../../api/destinations';
+import { useAdminPackagesQuery } from '../../api/packages';
+import { useAdminEnquiriesQuery } from '../../api/enquiries';
 import { AuditLogsModal } from './AuditLogsModal';
 
 interface DashboardViewProps {
-  tours: Tour[];
-  enquiries: BookingEnquiry[];
   onNavigate: (tab: NavigationKey) => void;
 }
 
@@ -56,8 +56,6 @@ const PERIOD_LABELS: Record<DashboardPeriod, string> = {
 };
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
-  tours,
-  enquiries,
   onNavigate,
 }) => {
   const { theme } = useTheme();
@@ -72,6 +70,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const { data: revenueSeriesData } = useDashboardRevenueSeriesQuery(chartMonths);
   const { data: destinationBookingsData } = useDashboardDestinationBookingsQuery();
   const { data: destinationsData } = useDestinationsQuery();
+  const { data: recentEnquiriesData } = useAdminEnquiriesQuery({ page: 1, limit: 4 });
+  const { data: featuredPackagesData } = useAdminPackagesQuery({ limit: 3 });
   const { data: leadRatioData } = useDashboardLeadRatioQuery(
     selectedDestinationFilter === 'All' ? undefined : selectedDestinationFilter,
   );
@@ -117,14 +117,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const revenueDisplay = summaryData
     ? `₹${summaryData.totalRevenue.toLocaleString('en-IN')}`
     : '₹0';
-  const activeToursDisplay = String(
-    summaryData?.activePackages ??
-      tours.filter((t) => t.status === 'Published').length,
-  );
-  const newEnquiriesDisplay = String(
-    summaryData?.newEnquiries ??
-      enquiries.filter((e) => e.status === 'New').length,
-  );
+  const activeToursDisplay = String(summaryData?.activePackages ?? 0);
+  const newEnquiriesDisplay = String(summaryData?.newEnquiries ?? 0);
   const activeTravelersDisplay = summaryData
     ? summaryData.activeTravelers.toLocaleString('en-IN')
     : '0';
@@ -679,74 +673,89 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800/80 font-medium">
-                {enquiries.slice(0, 4).map((enq) => (
-                  <tr
-                    key={enq.id}
-                    onClick={() => onNavigate('booking-enquiries')}
-                    className="hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors"
-                  >
-                    <td className="py-3.5 px-2">
-                      <div className="font-semibold text-slate-900 dark:text-white text-sm">
-                        {enq.customerName}
-                      </div>
-                      <div className="text-xs text-slate-500 truncate max-w-[190px]">
-                        <span className="font-semibold text-blue-600 dark:text-blue-400">
-                          [{enq.destination}]
-                        </span>{' '}
-                        {enq.tourName}
-                      </div>
-                    </td>
-
-                    <td className="py-3.5 px-2 text-xs">
-                      {enq.assignedVendorName ? (
-                        <div className="flex items-center gap-1 text-slate-700 dark:text-slate-300 font-semibold truncate max-w-[150px]">
-                          <Building2 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                          <span className="truncate">{enq.assignedVendorName}</span>
-                        </div>
-                      ) : (
-                        <span className="text-slate-400 italic">Not Assigned</span>
-                      )}
-                    </td>
-
-                    <td className="py-3.5 px-2">
-                      <span
-                        className={`inline-block px-2 py-0.5 rounded-[4px] text-xs font-semibold ${
-                          enq.vendorLeadStatus === 'Accepted'
-                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                            : enq.vendorLeadStatus === 'Sent to Vendor'
-                            ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
-                            : enq.vendorLeadStatus === 'Declined'
-                            ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
-                            : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400'
-                        }`}
-                      >
-                        {enq.vendorLeadStatus}
-                      </span>
-                    </td>
-
-                    <td className="py-3.5 px-2 font-semibold text-slate-900 dark:text-white text-sm">
-                      {enq.finalQuotedPrice
-                        ? `₹${enq.finalQuotedPrice.toLocaleString('en-IN')}`
-                        : enq.budget}
-                    </td>
-
-                    <td className="py-3.5 px-2">
-                      <span
-                        className={`inline-block px-2.5 py-1 rounded-[4px] text-xs font-semibold ${
-                          enq.status === 'New'
-                            ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
-                            : enq.status === 'In Progress'
-                            ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
-                            : enq.status === 'Confirmed'
-                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
-                            : 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
-                        }`}
-                      >
-                        {enq.status}
-                      </span>
+                {(recentEnquiriesData?.data ?? []).length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="py-8 text-center text-xs text-slate-400">
+                      No recent booking enquiries found
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  (recentEnquiriesData?.data ?? []).map((enq) => {
+                    const priceDisplay = enq.finalPricePaise
+                      ? `₹${Math.round(enq.finalPricePaise / 100).toLocaleString('en-IN')}`
+                      : enq.estimatePaise
+                      ? `₹${Math.round(enq.estimatePaise / 100).toLocaleString('en-IN')}`
+                      : 'Pending Quote';
+                    return (
+                      <tr
+                        key={enq.id}
+                        onClick={() => onNavigate('booking-enquiries')}
+                        className="hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors"
+                      >
+                        <td className="py-3.5 px-2">
+                          <div className="font-semibold text-slate-900 dark:text-white text-sm">
+                            {enq.customerName}
+                          </div>
+                          <div className="text-xs text-slate-500 truncate max-w-[190px]">
+                            {enq.destinationName && (
+                              <span className="font-semibold text-blue-600 dark:text-blue-400 mr-1">
+                                [{enq.destinationName}]
+                              </span>
+                            )}
+                            {enq.packageTitle || 'Custom Itinerary'}
+                          </div>
+                        </td>
+
+                        <td className="py-3.5 px-2 text-xs">
+                          {enq.assignedVendorId ? (
+                            <div className="flex items-center gap-1 text-slate-700 dark:text-slate-300 font-semibold truncate max-w-[150px]">
+                              <Building2 className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                              <span className="truncate">Assigned Partner</span>
+                            </div>
+                          ) : (
+                            <span className="text-slate-400 italic">Not Assigned</span>
+                          )}
+                        </td>
+
+                        <td className="py-3.5 px-2">
+                          <span
+                            className={`inline-block px-2 py-0.5 rounded-[4px] text-xs font-semibold capitalize ${
+                              enq.vendorLeadStatus === 'accepted'
+                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                : enq.vendorLeadStatus === 'sent_to_vendor'
+                                ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
+                                : enq.vendorLeadStatus === 'declined'
+                                ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
+                                : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400'
+                            }`}
+                          >
+                            {enq.vendorLeadStatus ? enq.vendorLeadStatus.replace(/_/g, ' ') : 'Unassigned'}
+                          </span>
+                        </td>
+
+                        <td className="py-3.5 px-2 font-semibold text-slate-900 dark:text-white text-sm">
+                          {priceDisplay}
+                        </td>
+
+                        <td className="py-3.5 px-2">
+                          <span
+                            className={`inline-block px-2.5 py-1 rounded-[4px] text-xs font-semibold capitalize ${
+                              enq.status === 'new'
+                                ? 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'
+                                : enq.status === 'in_progress'
+                                ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                                : enq.status === 'confirmed' || enq.status === 'completed'
+                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                : 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
+                            }`}
+                          >
+                            {enq.status.replace(/_/g, ' ')}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>
@@ -777,36 +786,42 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
 
           <div className="space-y-3 mt-3">
-            {tours.slice(0, 3).map((tour) => (
-              <div
-                key={tour.id}
-                onClick={() => onNavigate('manage-tours')}
-                className="flex items-center gap-3 p-2.5 rounded-[4px] hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer border border-transparent hover:border-slate-200 dark:hover:border-slate-700 transition-colors"
-              >
-                <img
-                  src={tour.featuredImage}
-                  alt={tour.title}
-                  className="w-14 h-14 rounded-[4px] object-cover shrink-0"
-                />
-                <div className="flex-1 min-w-0">
-                  <h4 className="text-sm font-semibold text-slate-900 dark:text-white truncate">
-                    {tour.title}
-                  </h4>
-                  <p className="text-xs text-slate-500 truncate">
-                    {tour.destination}, {tour.country}
-                  </p>
-                  <div className="flex items-center justify-between mt-1.5 text-xs">
-                    <span className="font-bold text-blue-600 dark:text-blue-400 text-sm">
-                      ₹{tour.price.toLocaleString('en-IN')}
-                    </span>
-                    <span className="flex items-center gap-1 text-amber-500 font-semibold">
-                      <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                      {tour.rating}
-                    </span>
+            {(featuredPackagesData?.data ?? []).length === 0 ? (
+              <div className="py-8 text-center text-xs text-slate-400">
+                No published packages found
+              </div>
+            ) : (
+              (featuredPackagesData?.data ?? []).slice(0, 3).map((pkg) => (
+                <div
+                  key={pkg.id}
+                  onClick={() => onNavigate('manage-tours')}
+                  className="flex items-center gap-3 p-2.5 rounded-[4px] hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer border border-transparent hover:border-slate-200 dark:hover:border-slate-700 transition-colors"
+                >
+                  <img
+                    src={pkg.coverImageUrl || 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=200&q=80'}
+                    alt={pkg.title}
+                    className="w-14 h-14 rounded-[4px] object-cover shrink-0"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <h4 className="text-sm font-semibold text-slate-900 dark:text-white truncate">
+                      {pkg.title}
+                    </h4>
+                    <p className="text-xs text-slate-500 truncate">
+                      {pkg.locationLabel || pkg.destinationName}
+                    </p>
+                    <div className="flex items-center justify-between mt-1.5 text-xs">
+                      <span className="font-bold text-blue-600 dark:text-blue-400 text-sm">
+                        ₹{Math.round(pkg.pricePaise / 100).toLocaleString('en-IN')}
+                      </span>
+                      <span className="flex items-center gap-1 text-amber-500 font-semibold">
+                        <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                        {pkg.ratingAvg.toFixed(1)}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
 
           <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-800">

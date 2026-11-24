@@ -18,7 +18,6 @@ import {
   Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import type { Tour } from '../../types';
 import { useTheme } from '../../context/ThemeContext';
 import { DropdownFilter } from '../common/DropdownFilter';
 import { DeleteConfirmModal } from '../common/DeleteConfirmModal';
@@ -35,11 +34,6 @@ import {
 } from '../../api/packages';
 
 interface ManageTourViewProps {
-  tours?: Tour[];
-  onAddTour?: (tour: Tour) => void;
-  onUpdateTour?: (tour: Tour) => void;
-  onDeleteTour?: (id: string) => void;
-  onToggleStatus?: (id: string) => void;
   isAddModalOpen?: boolean;
   setIsAddModalOpen?: (open: boolean) => void;
 }
@@ -61,11 +55,6 @@ const toPackageStatus = (val: string): PackageStatus | undefined => {
 };
 
 export const ManageTourView: React.FC<ManageTourViewProps> = ({
-  tours: _legacyTours,
-  onAddTour: _legacyAdd,
-  onUpdateTour: _legacyUpdate,
-  onDeleteTour: _legacyDelete,
-  onToggleStatus: _legacyToggle,
   isAddModalOpen = false,
   setIsAddModalOpen,
 }) => {

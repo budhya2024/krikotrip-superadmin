@@ -35,7 +35,6 @@ export const ChatbotView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'simulator' | 'settings' | 'logs'>('simulator');
   const [isBotActive, setIsBotActive] = useState(true);
 
-  // Bot Config State
   const [botName, setBotName] = useState('KrikoTrip AI Travel Assistant');
   const [welcomeMessage, setWelcomeMessage] = useState(
     'Hello! 👋 I am KrikoTrip AI Assistant. How can I assist your travel plans today? Ask me about our Kashmir, Andaman, Kerala, or Sundarban tour packages!'
@@ -44,7 +43,6 @@ export const ChatbotView: React.FC = () => {
   const [autoLeadCapture, setAutoLeadCapture] = useState(true);
   const [savedSuccess, setSavedSuccess] = useState(false);
 
-  // Chat Simulator State
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -115,7 +113,7 @@ export const ChatbotView: React.FC = () => {
 
   return (
     <div className="space-y-5">
-      {/* Top Banner / Header */}
+      
       <div
         className={`p-4 sm:p-5 rounded-[4px] border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
           }`}
@@ -129,7 +127,9 @@ export const ChatbotView: React.FC = () => {
               <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
                 AI Travel Chatbot
               </h2>
-
+              <span className="inline-flex items-center px-2 py-0.5 rounded-[4px] text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-200 dark:border-amber-900">
+                Preview – not live
+              </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
               Live automated customer assistance, lead generation, and package inquiry answering.
@@ -137,7 +137,7 @@ export const ChatbotView: React.FC = () => {
           </div>
         </div>
 
-        {/* Status Toggle Switch */}
+        
         <div className="flex items-center gap-3 self-end sm:self-center">
           <button
             type="button"
@@ -162,7 +162,15 @@ export const ChatbotView: React.FC = () => {
         </div>
       </div>
 
-      {/* Metrics Row */}
+      <div className="p-3.5 rounded-[4px] border border-amber-200 dark:border-amber-900 bg-amber-50/70 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 flex items-center justify-between text-xs">
+        <div className="flex items-center gap-2">
+          <Sparkles className="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400" />
+          <span>
+            <strong>Feature Preview (Deferred / L3):</strong> This interactive chatbot console is currently in simulated preview mode. Live customer chat orchestration and direct enquiry creation will be enabled upon deployment of Milestone L3.
+          </span>
+        </div>
+      </div>
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <div
           className={`p-4 rounded-[4px] border ${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
@@ -215,7 +223,7 @@ export const ChatbotView: React.FC = () => {
         </div>
       </div>
 
-      {/* Tabs Switcher */}
+      
       <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-1">
         <button
           onClick={() => setActiveTab('simulator')}
@@ -251,15 +259,15 @@ export const ChatbotView: React.FC = () => {
         </button>
       </div>
 
-      {/* TAB 1: LIVE TEST SIMULATOR */}
+      
       {activeTab === 'simulator' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          {/* Chat Window */}
+          
           <div
             className={`lg:col-span-2 rounded-[4px] border flex flex-col h-[560px] ${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
               }`}
           >
-            {/* Chat Header */}
+            
             <div className="p-3.5 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <div className="relative">
@@ -287,7 +295,7 @@ export const ChatbotView: React.FC = () => {
               </button>
             </div>
 
-            {/* Chat Messages */}
+            
             <div className="flex-1 p-4 overflow-y-auto space-y-3">
               {messages.map((m) => (
                 <div
@@ -321,7 +329,7 @@ export const ChatbotView: React.FC = () => {
               )}
             </div>
 
-            {/* Chat Input */}
+            
             <div className="p-3 border-t border-slate-200 dark:border-slate-800 flex items-center gap-2">
               <input
                 type="text"
@@ -347,7 +355,7 @@ export const ChatbotView: React.FC = () => {
             </div>
           </div>
 
-          {/* Quick Test Queries */}
+          
           <div
             className={`p-4 rounded-[4px] border space-y-3.5 flex flex-col justify-between ${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
               }`}
@@ -394,7 +402,7 @@ export const ChatbotView: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 2: BOT CONFIGURATION */}
+      
       {activeTab === 'settings' && (
         <div
           className={`max-w-2xl p-5 rounded-[4px] border ${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
@@ -489,7 +497,7 @@ export const ChatbotView: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 3: CAPTURED LEADS / INQUIRIES */}
+      
       {activeTab === 'logs' && (
         <div
           className={`rounded-[4px] border overflow-hidden shadow-xs ${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'

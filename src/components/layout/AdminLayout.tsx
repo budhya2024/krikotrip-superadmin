@@ -2,15 +2,7 @@ import React, { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
-import type {
-  NavigationKey,
-  Tour,
-  BookingEnquiry,
-} from '../../types';
-import {
-  mockTours,
-  mockEnquiries,
-} from '../../data/mockData';
+import type { NavigationKey } from '../../types';
 import { DashboardView } from '../views/DashboardView';
 import { HomePageView } from '../views/HomePageView';
 import { ManageTourView } from '../views/ManageTourView';
@@ -64,34 +56,11 @@ export const AdminLayout: React.FC = () => {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [isAddTourModalOpen, setIsAddTourModalOpen] = useState(false);
 
-  const [tours, setTours] = useState<Tour[]>(mockTours);
-  const [enquiries] = useState<BookingEnquiry[]>(mockEnquiries);
-
-  const handleAddTour = (newTour: Tour) => {
-    setTours([newTour, ...tours]);
-  };
-
-  const handleUpdateTour = (updatedTour: Tour) => {
-    setTours(tours.map((t) => (t.id === updatedTour.id ? updatedTour : t)));
-  };
-
-  const handleDeleteTour = (id: string) => {
-    setTours(tours.filter((t) => t.id !== id));
-  };
-
-  const handleToggleTourStatus = (id: string) => {
-    setTours(
-      tours.map((t) => (t.id === id ? { ...t, status: t.status === 'Published' ? 'Draft' : 'Published' } : t))
-    );
-  };
-
   const renderContent = () => {
     switch (currentTab) {
       case 'dashboard':
         return (
           <DashboardView
-            tours={tours}
-            enquiries={enquiries}
             onNavigate={(tab) => handleSelectTab(tab)}
           />
         );
@@ -100,11 +69,6 @@ export const AdminLayout: React.FC = () => {
       case 'manage-tours':
         return (
           <ManageTourView
-            tours={tours}
-            onAddTour={handleAddTour}
-            onUpdateTour={handleUpdateTour}
-            onDeleteTour={handleDeleteTour}
-            onToggleStatus={handleToggleTourStatus}
             isAddModalOpen={isAddTourModalOpen}
             setIsAddModalOpen={setIsAddTourModalOpen}
           />
