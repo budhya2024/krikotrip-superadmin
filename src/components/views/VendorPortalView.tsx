@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import {
   Search,
   Plus,
-  ShieldAlert,
   KeyRound,
   Trash2,
   X,
@@ -15,12 +14,27 @@ import {
   RotateCcw,
   Compass,
   Copy,
+  Star,
+  Users,
+  AlertCircle,
 } from 'lucide-react';
-import type { Vendor, BookingEnquiry } from '../../types';
 import { useTheme } from '../../context/ThemeContext';
 import { DropdownFilter } from '../common/DropdownFilter';
 import { DeleteConfirmModal } from '../common/DeleteConfirmModal';
 import { VendorDetailsModal } from './VendorDetailsModal';
+import {
+  useCreateVendorMutation,
+  useDeleteVendorMutation,
+  useUpdateVendorPortalAccessMutation,
+  useUpdateVendorStatusMutation,
+  useUpdateVendorTerritoriesMutation,
+  useVendorsQuery,
+  type AdminVendorItem,
+  type VendorCategory,
+  type VendorPortalRole,
+  type VendorStatus,
+} from '../../api/vendors';
+import { useDestinationsQuery } from '../../api/destinations';
 
 export const SUPPORTED_DESTINATIONS = [
   'Kashmir',
@@ -32,93 +46,123 @@ export const SUPPORTED_DESTINATIONS = [
 
 export type SupportedDestination = (typeof SUPPORTED_DESTINATIONS)[number];
 
-interface VendorPortalViewProps {
-  vendors: Vendor[];
-  enquiries?: BookingEnquiry[];
-  onTogglePortalAccess: (id: string) => void;
-  onUpdateVendorStatus: (id: string, status: Vendor['status']) => void;
-  onUpdateVendorDestinations: (vendorId: string, destinations: string[]) => void;
-  onAddVendor: (vendor: Omit<Vendor, 'id' | 'createdAt' | 'toursListed'>) => void;
-  onDeleteVendor: (id: string) => void;
-  onVendorLeadResponse?: (enquiryId: string, response: 'Accepted' | 'Declined') => void;
-}
-
 export const getDestinationBadgeStyle = (destination: string) => {
-  switch (destination) {
-    case 'Kashmir':
+  switch (destination.toLowerCase()) {
+    case 'kashmir':
       return 'bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300 border-sky-300 dark:border-sky-800';
-    case 'Andaman':
+    case 'andaman':
       return 'bg-cyan-100 text-cyan-800 dark:bg-cyan-950 dark:text-cyan-300 border-cyan-300 dark:border-cyan-800';
-    case 'Kerala':
+    case 'kerala':
       return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800';
-    case 'Sundarban':
+    case 'sundarban':
       return 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border-amber-300 dark:border-amber-800';
-    case 'Gangtok':
+    case 'gangtok':
+    case 'sikkim':
       return 'bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-300 border-violet-300 dark:border-violet-800';
+    case 'goa':
+      return 'bg-orange-100 text-orange-800 dark:bg-orange-950 dark:text-orange-300 border-orange-300 dark:border-orange-800';
+    case 'rajasthan':
+      return 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border-rose-300 dark:border-rose-800';
     default:
       return 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border-blue-200 dark:border-blue-800';
   }
 };
 
-export const VendorPortalView: React.FC<VendorPortalViewProps> = ({
-  vendors,
-  onTogglePortalAccess,
-  onUpdateVendorStatus,
-  onUpdateVendorDestinations,
-  onAddVendor,
-  onDeleteVendor,
-}) => {
+const mapCategoryToApi = (cat: string): VendorCategory | undefined => {
+  switch (cat) {
+    case 'Tour Operator':
+      return 'tour_operator';
+    case 'Resort & Hotel':
+      return 'resort_hotel';
+    case 'Transport & Fleet':
+      return 'transport_fleet';
+    case 'Adventure Guide':
+      return 'adventure_guide';
+    default:
+      return undefined;
+  }
+};
+
+const mapStatusToApi = (status: string): VendorStatus | undefined => {
+  switch (status) {
+    case 'Active':
+      return 'active';
+    case 'Pending Approval':
+      return 'pending_approval';
+    case 'Suspended':
+      return 'suspended';
+    default:
+      return undefined;
+  }
+};
+
+export const VendorPortalView: React.FC = () => {
   const { theme } = useTheme();
+
   const [searchQuery, setSearchQuery] = useState('');
+  const [statusTab, setStatusTab] = useState<'All' | 'Active' | 'Pending Approval' | 'Suspended'>('All');
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [destinationFilter, setDestinationFilter] = useState('All');
+  const [page, setPage] = useState(1);
+
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-
-  // Vendor Details Drawer State
-  const [selectedVendorForDetails, setSelectedVendorForDetails] = useState<Vendor | null>(null);
+  const [selectedVendorForDetailsId, setSelectedVendorForDetailsId] = useState<string | null>(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
-  const [deleteTargetVendor, setDeleteTargetVendor] = useState<Vendor | null>(null);
+  const [deleteTargetVendor, setDeleteTargetVendor] = useState<AdminVendorItem | null>(null);
 
-  // Destination Management Modal State
-  const [editingVendorForDest, setEditingVendorForDest] = useState<Vendor | null>(null);
-  const [selectedDestList, setSelectedDestList] = useState<string[]>([]);
+  const [editingVendorForDest, setEditingVendorForDest] = useState<{ id: string; name: string; destinationIds: string[] } | null>(null);
+  const [selectedDestIds, setSelectedDestIds] = useState<string[]>([]);
 
-  // Add Vendor Form
+  const [businessName, setBusinessName] = useState('');
   const [contactPerson, setContactPerson] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [location, setLocation] = useState('');
-  const [category, setCategory] = useState<Vendor['category']>('Tour Operator');
-  const [commissionRate, setCommissionRate] = useState(12);
-  const [portalRole, setPortalRole] = useState<Vendor['portalRole']>('Vendor Admin');
-  const portalAccess = true;
-  const [assignedDestinations, setAssignedDestinations] = useState<string[]>(['Kashmir']);
+  const [category, setCategory] = useState<VendorCategory>('tour_operator');
+  const [commissionPercent, setCommissionPercent] = useState<number>(12);
+  const [portalRole, setPortalRole] = useState<VendorPortalRole>('vendor_admin');
+  const [portalAccess, setPortalAccess] = useState(false);
+  const [regDestinationIds, setRegDestinationIds] = useState<string[]>([]);
+  const [notes, setNotes] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
 
-  // Generator functions for Vendor Registration ID and Password
-  const generateRegistrationId = () => {
-    const randomNum = Math.floor(1000 + Math.random() * 9000);
-    return `VR-2026-${randomNum}`;
-  };
-
-  const generatePassword = () => {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
-    let pass = 'Kriko@';
-    for (let i = 0; i < 4; i++) {
-      pass += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return pass;
-  };
-
-  const [registrationId, setRegistrationId] = useState(generateRegistrationId());
-  const [portalPassword, setPortalPassword] = useState(generatePassword());
-  const [copiedField, setCopiedField] = useState<string | null>(null);
   const [registeredSuccessVendor, setRegisteredSuccessVendor] = useState<{
-    name: string;
-    regId: string;
+    businessName: string;
+    code: string;
+    registrationId: string;
     email: string;
-    password: string;
-    dest: string;
+    destinations: string[];
   } | null>(null);
+
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+
+  const destinationsQuery = useDestinationsQuery();
+  const destinationsList = destinationsQuery.data || [];
+
+  const vendorsQuery = useVendorsQuery({
+    search: searchQuery.trim() || undefined,
+    status: mapStatusToApi(statusTab),
+    category: mapCategoryToApi(categoryFilter),
+    destinationId: destinationFilter === 'All' ? undefined : destinationFilter,
+    page,
+    limit: 10,
+  });
+
+  const createVendorMutation = useCreateVendorMutation();
+  const updateStatusMutation = useUpdateVendorStatusMutation();
+  const updatePortalAccessMutation = useUpdateVendorPortalAccessMutation();
+  const updateTerritoriesMutation = useUpdateVendorTerritoriesMutation();
+  const deleteVendorMutation = useDeleteVendorMutation();
+
+  const vendorsData = vendorsQuery.data;
+  const vendorsList = vendorsData?.items || [];
+  const facets = vendorsData?.facets;
+  const stats = vendorsData?.stats || {
+    totalVendors: 0,
+    activeCount: 0,
+    pendingApprovalsCount: 0,
+    portalAccessCount: 0,
+  };
 
   const copyToClipboard = (text: string, fieldName: string) => {
     navigator.clipboard.writeText(text);
@@ -127,9 +171,85 @@ export const VendorPortalView: React.FC<VendorPortalViewProps> = ({
   };
 
   const handleOpenRegisterModal = () => {
-    setRegistrationId(generateRegistrationId());
-    setPortalPassword(generatePassword());
+    setBusinessName('');
+    setContactPerson('');
+    setEmail('');
+    setPhone('');
+    setLocation('');
+    setCategory('tour_operator');
+    setCommissionPercent(12);
+    setPortalRole('vendor_admin');
+    setPortalAccess(false);
+    setRegDestinationIds([]);
+    setNotes('');
+    setFormError(null);
     setIsAddModalOpen(true);
+  };
+
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!businessName.trim() || !contactPerson.trim() || !email.trim() || !phone.trim() || !location.trim()) {
+      setFormError('Please fill out all required fields');
+      return;
+    }
+    setFormError(null);
+
+    try {
+      const created = await createVendorMutation.mutateAsync({
+        businessName: businessName.trim(),
+        contactPerson: contactPerson.trim(),
+        email: email.trim().toLowerCase(),
+        phone: phone.trim(),
+        category,
+        location: location.trim(),
+        commissionPercent,
+        status: 'pending_approval',
+        portalAccess,
+        portalRole,
+        destinationIds: regDestinationIds,
+        notes: notes.trim() || null,
+      });
+
+      setIsAddModalOpen(false);
+      setRegisteredSuccessVendor({
+        businessName: created.businessName,
+        code: created.code,
+        registrationId: created.registrationId,
+        email: created.email,
+        destinations: created.assignedDestinations,
+      });
+    } catch {
+      setFormError('Failed to register vendor. Check if email or code is already in use.');
+    }
+  };
+
+  const handleOpenDestModal = (vendor: { id: string; businessName: string; territories?: Array<{ id: string }> }) => {
+    setEditingVendorForDest({
+      id: vendor.id,
+      name: vendor.businessName,
+      destinationIds: vendor.territories ? vendor.territories.map((t) => t.id) : [],
+    });
+    setSelectedDestIds(vendor.territories ? vendor.territories.map((t) => t.id) : []);
+  };
+
+  const handleSaveDestinations = async () => {
+    if (!editingVendorForDest) return;
+    await updateTerritoriesMutation.mutateAsync({
+      id: editingVendorForDest.id,
+      destinationIds: selectedDestIds,
+    });
+    setEditingVendorForDest(null);
+  };
+
+  const handleOpenDetails = (id: string) => {
+    setSelectedVendorForDetailsId(id);
+    setIsDetailsModalOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTargetVendor) return;
+    await deleteVendorMutation.mutateAsync(deleteTargetVendor.id);
+    setDeleteTargetVendor(null);
   };
 
   const categories = [
@@ -145,13 +265,12 @@ export const VendorPortalView: React.FC<VendorPortalViewProps> = ({
       value: 'All',
       label: 'All Destinations',
       icon: <Compass className="w-4 h-4 text-blue-600 dark:text-blue-400" />,
-      badge: vendors.length,
+      badge: stats.totalVendors,
     },
-    ...SUPPORTED_DESTINATIONS.map((dest) => ({
-      value: dest,
-      label: dest,
+    ...destinationsList.map((dest) => ({
+      value: dest.id,
+      label: dest.name,
       icon: <MapPin className="w-4 h-4 text-blue-500" />,
-      badge: vendors.filter((v) => v.assignedDestinations?.includes(dest)).length,
     })),
   ];
 
@@ -160,766 +279,635 @@ export const VendorPortalView: React.FC<VendorPortalViewProps> = ({
       value: 'All',
       label: 'All Categories',
       icon: <Filter className="w-4 h-4 text-slate-400" />,
-      badge: vendors.length,
+      badge: stats.totalVendors,
     },
-    ...categories.filter((c) => c !== 'All').map((cat) => ({
-      value: cat,
-      label: cat,
-      icon: <Building className="w-4 h-4 text-blue-500" />,
-      badge: vendors.filter((v) => v.category === cat).length,
-    })),
+    ...categories.filter((c) => c !== 'All').map((cat) => {
+      const apiCat = mapCategoryToApi(cat);
+      const count = (apiCat && facets?.byCategory?.[apiCat]) || 0;
+      return {
+        value: cat,
+        label: cat,
+        icon: <Building className="w-4 h-4 text-blue-500" />,
+        badge: count,
+      };
+    }),
   ];
 
-  // Filtering for Directory
-  const filteredVendors = vendors.filter((v) => {
-    const matchCat = categoryFilter === 'All' || v.category === categoryFilter;
-    const matchDest =
-      destinationFilter === 'All' ||
-      (v.assignedDestinations && v.assignedDestinations.includes(destinationFilter));
-    const matchSearch =
-      v.businessName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      v.contactPerson.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      v.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (v.assignedDestinations &&
-        v.assignedDestinations.some((d) =>
-          d.toLowerCase().includes(searchQuery.toLowerCase())
-        ));
-    return matchCat && matchDest && matchSearch;
-  });
-
-  const totalVendors = vendors.length;
-  const activeAccessCount = vendors.filter((v) => v.portalAccess).length;
-  const pendingApprovalsCount = vendors.filter((v) => v.status === 'Pending Approval').length;
-
-  // Modal: Open Destination Assignment
-  const handleOpenDestModal = (vendor: Vendor) => {
-    setEditingVendorForDest(vendor);
-    setSelectedDestList([...(vendor.assignedDestinations || [])]);
-  };
-
-  const handleToggleDestCheckbox = (dest: string) => {
-    if (selectedDestList.includes(dest)) {
-      if (selectedDestList.length > 1) {
-        setSelectedDestList(selectedDestList.filter((d) => d !== dest));
-      }
-    } else {
-      setSelectedDestList([...selectedDestList, dest]);
-    }
-  };
-
-  const handleSaveDestinations = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingVendorForDest) return;
-
-    onUpdateVendorDestinations(editingVendorForDest.id, selectedDestList);
-    setEditingVendorForDest(null);
-  };
-
-  const handleAddSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!contactPerson || !email) return;
-
-    onAddVendor({
-      businessName: contactPerson,
-      contactPerson,
-      email,
-      phone,
-      location: location || `${assignedDestinations[0] || 'Local'} Territory`,
-      category,
-      commissionRate: Number(commissionRate),
-      portalRole,
-      portalAccess,
-      assignedDestinations: assignedDestinations.length > 0 ? assignedDestinations : ['Kashmir'],
-      status: 'Active',
-      registrationId,
-      portalPassword,
-    });
-
-    setRegisteredSuccessVendor({
-      name: contactPerson,
-      regId: registrationId,
-      email,
-      password: portalPassword,
-      dest: assignedDestinations.join(', '),
-    });
-
-    setContactPerson('');
-    setEmail('');
-    setPhone('');
-    setLocation('');
-    setAssignedDestinations(['Kashmir']);
-    setIsAddModalOpen(false);
-  };
-
   return (
-    <div className="space-y-5">
-      {/* Overview Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div
-          className={`p-4 rounded-[4px] border ${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
-            }`}
-        >
-          <div className="flex items-center justify-between text-sm font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
-            <span>Destination Partners</span>
-            <Building className="w-5 h-5 text-blue-600" />
-          </div>
-          <div className="text-2xl font-bold text-slate-900 dark:text-white">
-            {totalVendors}
-          </div>
-          <span className="text-xs text-slate-500 font-medium">Across 5 Primary Hubs</span>
-        </div>
-
-        <div
-          className={`p-4 rounded-[4px] border ${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
-            }`}
-        >
-          <div className="flex items-center justify-between text-sm font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
-            <span>Portal Login Enabled</span>
-            <KeyRound className="w-5 h-5 text-emerald-600" />
-          </div>
-          <div className="text-2xl font-bold text-slate-900 dark:text-white">
-            {activeAccessCount}
-          </div>
-          <span className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold">
-            Authorized portal users
-          </span>
-        </div>
-
-        <div
-          className={`p-4 rounded-[4px] border ${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
-            }`}
-        >
-          <div className="flex items-center justify-between text-sm font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
-            <span>Destinations Covered</span>
-            <MapPin className="w-5 h-5 text-sky-600" />
-          </div>
-          <div className="text-2xl font-bold text-slate-900 dark:text-white">
-            5 Regions
-          </div>
-          <span className="text-xs text-sky-600 dark:text-sky-400 font-semibold">
-            Kashmir, Andaman, Kerala, Sundarban, Gangtok
-          </span>
-        </div>
-
-        <div
-          className={`p-4 rounded-[4px] border ${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
-            }`}
-        >
-          <div className="flex items-center justify-between text-sm font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
-            <span>Pending Approvals</span>
-            <ShieldAlert className="w-5 h-5 text-amber-500" />
-          </div>
-          <div className="text-2xl font-bold text-slate-900 dark:text-white">
-            {pendingApprovalsCount}
-          </div>
-          <span className="text-xs text-amber-600 font-semibold">New applications</span>
-        </div>
-      </div>
-
-      {/* Top Header Bar with Register Action */}
-      <div
-        className={`p-3.5 sm:p-4 rounded-[4px] border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
-          }`}
-      >
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-[4px] bg-blue-100 dark:bg-blue-950/80 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 flex items-center justify-center shrink-0">
-            <Building className="w-5 h-5" />
-          </div>
-          <div>
-            <h2 className="text-sm sm:text-base font-semibold text-slate-900 dark:text-white flex items-center gap-2">
-              <span>Vendor Directory & Destination Control</span>
-
-            </h2>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Manage authorized local operators, assigned territories, commission rates, and portal credentials.
-            </p>
-          </div>
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">
+            Vendor Directory & Partner Management
+          </h1>
+          <p className="text-xs text-slate-500 mt-1">
+            Authorize local operators, manage destination territories, track completed bookings, and disburse payouts
+          </p>
         </div>
 
         <button
+          type="button"
           onClick={handleOpenRegisterModal}
-          className="flex items-center justify-center gap-2 px-4 py-2 rounded-[4px] text-xs sm:text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 transition-colors shadow-xs shrink-0 cursor-pointer"
+          className="flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-[4px] bg-blue-600 text-white hover:bg-blue-700 shadow-xs cursor-pointer self-start sm:self-auto"
         >
           <Plus className="w-4 h-4" />
           <span>Register Vendor</span>
         </button>
       </div>
 
-      {/* VENDOR DIRECTORY & DESTINATION ACCESS CONTROL */}
-      <div className="space-y-4">
-        {/* Destination & Category Filter Bar with Dropdowns and Icons */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div
-          className={`p-4 rounded-[4px] border space-y-3 ${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+          className={`p-4 rounded-[4px] border transition-all ${theme === 'dark' ? 'bg-slate-800/40 border-slate-700/60' : 'bg-white border-slate-200 shadow-xs'
             }`}
         >
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-            {/* Search input */}
-            <div className="relative flex-1 max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Search vendor name, email, location, territory..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className={`w-full pl-9 pr-3 py-2 text-xs sm:text-sm rounded-[4px] border outline-none ${theme === 'dark'
-                  ? 'bg-slate-800 border-slate-700 text-white focus:border-blue-500'
-                  : 'bg-slate-50 border-slate-200 text-slate-900 focus:border-blue-600'
-                  }`}
-              />
-            </div>
-
-            {/* Dropdown Filters with Icons */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <DropdownFilter
-                label="Destination"
-                value={destinationFilter}
-                onChange={setDestinationFilter}
-                options={destinationOptions}
-                icon={<MapPin className="w-4 h-4 text-blue-600 dark:text-blue-400" />}
-              />
-
-              <DropdownFilter
-                label="Category"
-                value={categoryFilter}
-                onChange={setCategoryFilter}
-                options={categoryOptions}
-                icon={<Building className="w-4 h-4 text-blue-600 dark:text-blue-400" />}
-              />
-
-              {(destinationFilter !== 'All' || categoryFilter !== 'All' || searchQuery) && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDestinationFilter('All');
-                    setCategoryFilter('All');
-                    setSearchQuery('');
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-[4px] border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:text-rose-600 hover:border-rose-300 dark:hover:border-rose-800 transition-colors"
-                  title="Reset all filters"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Reset</span>
-                </button>
-              )}
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-slate-500">Total Partners</span>
+            <div className="p-2 rounded-[4px] bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-300">
+              <Building className="w-4 h-4" />
             </div>
           </div>
-
-          {/* Active Filter Chips */}
-          {(destinationFilter !== 'All' || categoryFilter !== 'All') && (
-            <div className="flex items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-500 flex-wrap">
-              <span className="font-semibold text-slate-400 text-[11px] uppercase tracking-wider">
-                Active Filters:
-              </span>
-              {destinationFilter !== 'All' && (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[4px] bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 font-semibold text-xs">
-                  <MapPin className="w-3.5 h-3.5 text-blue-500" />
-                  <span>Destination: {destinationFilter}</span>
-                  <button
-                    type="button"
-                    onClick={() => setDestinationFilter('All')}
-                    className="hover:text-rose-500 cursor-pointer ml-0.5"
-                    title="Clear destination filter"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </span>
-              )}
-              {categoryFilter !== 'All' && (
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[4px] bg-sky-50 dark:bg-sky-950/60 border border-sky-200 dark:border-sky-800 text-sky-700 dark:text-sky-300 font-semibold text-xs">
-                  <Building className="w-3.5 h-3.5 text-sky-500" />
-                  <span>Category: {categoryFilter}</span>
-                  <button
-                    type="button"
-                    onClick={() => setCategoryFilter('All')}
-                    className="hover:text-rose-500 cursor-pointer ml-0.5"
-                    title="Clear category filter"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </span>
-              )}
-            </div>
-          )}
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-2xl font-bold text-slate-900 dark:text-white">
+              {stats.totalVendors}
+            </span>
+            <span className="text-xs text-slate-500">Registered</span>
+          </div>
         </div>
 
-        {/* Vendors Table */}
         <div
-          className={`rounded-[4px] border overflow-hidden shadow-xs ${theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+          className={`p-4 rounded-[4px] border transition-all ${theme === 'dark' ? 'bg-slate-800/40 border-slate-700/60' : 'bg-white border-slate-200 shadow-xs'
             }`}
         >
-          {/* Table Top Header Bar */}
-          <div
-            className={`px-4 py-3 border-b flex items-center justify-between gap-3 text-xs ${theme === 'dark' ? 'bg-slate-900/90 border-slate-800' : 'bg-slate-50 border-slate-200'
-              }`}
-          >
-            <div className="flex items-center gap-2">
-              <span className="font-semibold text-slate-800 dark:text-slate-200">
-                Registered Vendor Partners Log
-              </span>
-              <span className="text-xs text-slate-400 font-medium">
-                • {filteredVendors.length} Records
-              </span>
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-slate-500">Active Partners</span>
+            <div className="p-2 rounded-[4px] bg-emerald-50 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-300">
+              <CheckCircle2 className="w-4 h-4" />
             </div>
-
-
           </div>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-2xl font-bold text-slate-900 dark:text-white">
+              {stats.activeCount}
+            </span>
+            <span className="text-xs text-emerald-600 font-medium">Ready for tours</span>
+          </div>
+        </div>
 
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left text-sm">
-              <thead
-                className={`text-xs font-semibold uppercase tracking-wider border-b ${theme === 'dark'
-                  ? 'bg-slate-800/80 text-slate-300 border-slate-800'
-                  : 'bg-slate-50 text-slate-700 border-slate-200'
+        <div
+          className={`p-4 rounded-[4px] border transition-all ${theme === 'dark' ? 'bg-slate-800/40 border-slate-700/60' : 'bg-white border-slate-200 shadow-xs'
+            }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-slate-500">Pending Approval</span>
+            <div className="p-2 rounded-[4px] bg-amber-50 text-amber-600 dark:bg-amber-950 dark:text-amber-300">
+              <Users className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-2xl font-bold text-slate-900 dark:text-white">
+              {stats.pendingApprovalsCount}
+            </span>
+            <span className="text-xs text-amber-600 font-medium">Needs review</span>
+          </div>
+        </div>
+
+        <div
+          className={`p-4 rounded-[4px] border transition-all ${theme === 'dark' ? 'bg-slate-800/40 border-slate-700/60' : 'bg-white border-slate-200 shadow-xs'
+            }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-slate-500">Portal Enabled</span>
+            <div className="p-2 rounded-[4px] bg-purple-50 text-purple-600 dark:bg-purple-950 dark:text-purple-300">
+              <KeyRound className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-2 flex items-baseline gap-2">
+            <span className="text-2xl font-bold text-slate-900 dark:text-white">
+              {stats.portalAccessCount}
+            </span>
+            <span className="text-xs text-purple-600 font-medium">Portal access</span>
+          </div>
+        </div>
+      </div>
+
+      <div
+        className={`p-4 rounded-[4px] border space-y-4 ${theme === 'dark' ? 'bg-slate-800/30 border-slate-700' : 'bg-white border-slate-200 shadow-xs'
+          }`}
+      >
+        <div className="flex items-center gap-1 border-b border-slate-200 dark:border-slate-700 pb-2 overflow-x-auto">
+          {(['All', 'Active', 'Pending Approval', 'Suspended'] as const).map((tab) => {
+            const count =
+              tab === 'All'
+                ? stats.totalVendors
+                : tab === 'Active'
+                  ? facets?.byStatus?.active ?? 0
+                  : tab === 'Pending Approval'
+                    ? facets?.byStatus?.pending_approval ?? 0
+                    : facets?.byStatus?.suspended ?? 0;
+
+            const isActive = statusTab === tab;
+            return (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => {
+                  setStatusTab(tab);
+                  setPage(1);
+                }}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-[4px] flex items-center gap-1.5 transition-colors cursor-pointer ${isActive
+                  ? 'bg-blue-600 text-white'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
                   }`}
               >
-                <tr>
-                  <th className="py-3 px-3.5 font-semibold whitespace-nowrap">Vendor Partner</th>
-                  <th className="py-3 px-3.5 font-semibold whitespace-nowrap">Destination Territory Access</th>
-                  <th className="py-3 px-3.5 font-semibold whitespace-nowrap text-center">Tours Completed</th>
-                  <th className="py-3 px-3.5 font-semibold whitespace-nowrap">Category & City</th>
-                  <th className="py-3 px-3.5 font-semibold whitespace-nowrap text-center">Commission</th>
-                  <th className="py-3 px-3.5 font-semibold whitespace-nowrap text-center">Portal Login</th>
-                  <th className="py-3 px-3.5 font-semibold whitespace-nowrap text-center">Status</th>
-                  <th className="py-3 px-3.5 font-semibold whitespace-nowrap text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {filteredVendors.map((vendor) => (
+                <span>{tab}</span>
+                <span
+                  className={`text-[10px] px-1.5 py-0.2 rounded-full ${isActive
+                    ? 'bg-white/20 text-white'
+                    : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                    }`}
+                >
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="relative flex-1 max-w-md">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setPage(1);
+              }}
+              placeholder="Search by business name, code, contact person, email, or city..."
+              className="w-full pl-9 pr-4 py-2 text-xs rounded-[4px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-hidden focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <DropdownFilter
+              label="Category"
+              options={categoryOptions}
+              value={categoryFilter}
+              onChange={(val) => {
+                setCategoryFilter(val);
+                setPage(1);
+              }}
+            />
+
+            <DropdownFilter
+              label="Territory"
+              options={destinationOptions}
+              value={destinationFilter}
+              onChange={(val) => {
+                setDestinationFilter(val);
+                setPage(1);
+              }}
+            />
+
+            {(searchQuery || categoryFilter !== 'All' || destinationFilter !== 'All' || statusTab !== 'All') && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('');
+                  setCategoryFilter('All');
+                  setDestinationFilter('All');
+                  setStatusTab('All');
+                  setPage(1);
+                }}
+                className="p-2 text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 rounded-[4px] border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
+                title="Reset Filters"
+              >
+                <RotateCcw className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="overflow-x-auto rounded-[4px] border border-slate-200 dark:border-slate-700">
+          <table className="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr
+                className={`border-b ${theme === 'dark' ? 'bg-slate-800/80 border-slate-700 text-slate-400' : 'bg-slate-50/80 border-slate-200 text-slate-500'
+                  }`}
+              >
+                <th className="py-3 px-4 font-semibold">Partner & Code</th>
+                <th className="py-3 px-4 font-semibold">Contact & Location</th>
+                <th className="py-3 px-4 font-semibold">Category</th>
+                <th className="py-3 px-4 font-semibold">Assigned Territories</th>
+                <th className="py-3 px-4 font-semibold text-center">Tours & Rating</th>
+                <th className="py-3 px-4 font-semibold text-center">Commission</th>
+                <th className="py-3 px-4 font-semibold text-center">Status</th>
+                <th className="py-3 px-4 font-semibold text-center">Portal Access</th>
+                <th className="py-3 px-4 font-semibold text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              {vendorsList.length > 0 ? (
+                vendorsList.map((vendor) => (
                   <tr
                     key={vendor.id}
-                    className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+                    className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors"
                   >
-                    <td className="py-3 px-3.5 whitespace-nowrap">
-                      <div
-                        onClick={() => {
-                          setSelectedVendorForDetails(vendor);
-                          setIsDetailsModalOpen(true);
-                        }}
-                        className="font-semibold text-xs sm:text-sm text-slate-900 dark:text-white hover:text-blue-600 cursor-pointer truncate max-w-[160px]"
-                      >
-                        {vendor.businessName}
-                      </div>
-                      <div className="text-[11px] text-slate-500 truncate max-w-[160px]">
-                        {vendor.registrationId && (
-                          <span className="font-mono text-blue-600 dark:text-blue-400 font-semibold mr-1">
-                            {vendor.registrationId} •
-                          </span>
-                        )}
-                        {vendor.contactPerson} • {vendor.email}
+                    <td className="py-3.5 px-4">
+                      <div>
+                        <div className="font-semibold text-slate-900 dark:text-white">
+                          {vendor.businessName}
+                        </div>
+                        <div className="font-mono text-[11px] text-blue-600 dark:text-blue-400 font-semibold mt-0.5">
+                          {vendor.code} • {vendor.registrationId}
+                        </div>
                       </div>
                     </td>
 
-                    {/* Destination Access Badges (Clean text, no bg) */}
-                    <td className="py-3 px-3.5 whitespace-nowrap">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        {vendor.assignedDestinations && vendor.assignedDestinations.length > 0 ? (
-                          vendor.assignedDestinations.slice(0, 3).map((dest, i) => (
-                            <span key={dest} className="text-xs font-semibold text-slate-800 dark:text-slate-200">
-                              {dest}{i < Math.min(vendor.assignedDestinations.length, 3) - 1 ? ',' : ''}
+                    <td className="py-3.5 px-4">
+                      <div>
+                        <div className="font-medium text-slate-800 dark:text-slate-200">
+                          {vendor.contactPerson}
+                        </div>
+                        <div className="text-[11px] text-slate-500 flex items-center gap-1 mt-0.5">
+                          <MapPin className="w-3 h-3 text-slate-400" />
+                          <span>{vendor.location}</span>
+                        </div>
+                        <div className="text-[11px] text-slate-400 font-mono mt-0.5">
+                          {vendor.phone}
+                        </div>
+                      </div>
+                    </td>
+
+                    <td className="py-3.5 px-4 capitalize">
+                      <span className="px-2 py-0.5 rounded-[4px] bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium text-[11px]">
+                        {vendor.category.replace(/_/g, ' ')}
+                      </span>
+                    </td>
+
+                    <td className="py-3.5 px-4">
+                      <div className="flex flex-wrap gap-1 max-w-xs items-center">
+                        {vendor.assignedDestinations?.length ? (
+                          vendor.assignedDestinations.map((dest) => (
+                            <span
+                              key={dest}
+                              className={`text-[10px] font-semibold px-2 py-0.5 rounded-[4px] border ${getDestinationBadgeStyle(
+                                dest
+                              )}`}
+                            >
+                              {dest}
                             </span>
                           ))
                         ) : (
-                          <span className="text-xs text-slate-400 italic">No territory</span>
-                        )}
-                        {vendor.assignedDestinations && vendor.assignedDestinations.length > 3 && (
-                          <span className="text-[11px] font-medium text-slate-500">
-                            +{vendor.assignedDestinations.length - 3}
-                          </span>
+                          <span className="text-[11px] text-slate-400 italic">Unassigned</span>
                         )}
                         <button
                           type="button"
                           onClick={() => handleOpenDestModal(vendor)}
-                          className="text-[11px] font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 hover:underline ml-1 cursor-pointer"
-                          title="Configure Destination Access"
+                          className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline cursor-pointer ml-1 font-semibold"
                         >
                           Edit
                         </button>
                       </div>
                     </td>
 
-                    {/* Tours Completed (Clean text, no bg box) */}
-                    <td className="py-3 px-3.5 whitespace-nowrap text-center">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedVendorForDetails(vendor);
-                          setIsDetailsModalOpen(true);
-                        }}
-                        className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
-                        title="Click to view all completed tours for this vendor"
-                      >
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                        <span>{vendor.toursCompleted ?? vendor.completedToursList?.length ?? 0} Completed</span>
-                      </button>
-                    </td>
-
-                    <td className="py-3 px-3.5 whitespace-nowrap">
-                      <div className="text-slate-900 dark:text-white font-medium text-xs">
-                        {vendor.category}
+                    <td className="py-3.5 px-4 text-center">
+                      <div className="font-bold text-slate-900 dark:text-white">
+                        {vendor.toursCompleted} Tours
                       </div>
-                      <div className="text-[11px] text-slate-500">{vendor.location}</div>
+                      <div className="flex items-center justify-center gap-1 text-[11px] text-amber-500 font-semibold mt-0.5">
+                        <Star className="w-3 h-3 fill-amber-500 text-amber-500" />
+                        <span>{vendor.ratingAvg > 0 ? vendor.ratingAvg.toFixed(1) : 'New'}</span>
+                      </div>
                     </td>
 
-                    <td className="py-3 px-3.5 whitespace-nowrap text-center font-semibold text-slate-900 dark:text-white text-xs">
-                      {vendor.commissionRate}%
+                    <td className="py-3.5 px-4 text-center font-bold text-slate-800 dark:text-slate-200">
+                      {vendor.commissionPercent}%
                     </td>
 
-                    {/* Portal Access (Clean text, no bg box) */}
-                    <td className="py-3 px-3.5 whitespace-nowrap text-center">
+                    <td className="py-3.5 px-4 text-center">
+                      <select
+                        value={vendor.status}
+                        onChange={(e) =>
+                          updateStatusMutation.mutate({
+                            id: vendor.id,
+                            status: e.target.value as VendorStatus,
+                          })
+                        }
+                        className={`text-[11px] font-semibold px-2 py-1 rounded-[4px] border cursor-pointer outline-hidden ${vendor.status === 'active'
+                          ? 'bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800'
+                          : vendor.status === 'pending_approval'
+                            ? 'bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800'
+                            : 'bg-rose-50 text-rose-800 border-rose-300 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800'
+                          }`}
+                      >
+                        <option value="pending_approval">Pending Approval</option>
+                        <option value="active">Active</option>
+                        <option value="suspended">Suspended</option>
+                      </select>
+                    </td>
+
+                    <td className="py-3.5 px-4 text-center">
                       <button
                         type="button"
-                        onClick={() => onTogglePortalAccess(vendor.id)}
-                        className={`inline-flex items-center gap-1 text-xs font-semibold transition-colors cursor-pointer hover:underline ${vendor.portalAccess
-                          ? 'text-emerald-600 dark:text-emerald-400'
-                          : 'text-slate-400 dark:text-slate-500'
+                        onClick={() =>
+                          updatePortalAccessMutation.mutate({
+                            id: vendor.id,
+                            portalAccess: !vendor.portalAccess,
+                          })
+                        }
+                        className={`px-2 py-1 text-[11px] font-semibold rounded-[4px] border inline-flex items-center gap-1 transition-colors cursor-pointer ${vendor.portalAccess
+                          ? 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800'
+                          : 'bg-slate-100 text-slate-500 border-slate-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
                           }`}
-                        title="Toggle Portal Login Access"
                       >
-                        <KeyRound className="w-3.5 h-3.5" />
+                        <KeyRound className="w-3 h-3" />
                         <span>{vendor.portalAccess ? 'Enabled' : 'Disabled'}</span>
                       </button>
                     </td>
 
-                    {/* Status (Clean text, no dropdown box) */}
-                    <td className="py-3 px-3.5 whitespace-nowrap text-center">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          onUpdateVendorStatus(
-                            vendor.id,
-                            vendor.status === 'Active' ? 'Pending Approval' : 'Active'
-                          )
-                        }
-                        className={`text-xs font-semibold cursor-pointer hover:underline ${vendor.status === 'Active'
-                          ? 'text-emerald-600 dark:text-emerald-400'
-                          : vendor.status === 'Pending Approval'
-                            ? 'text-amber-600 dark:text-amber-400'
-                            : 'text-rose-600 dark:text-rose-400'
-                          }`}
-                        title="Click to toggle status"
-                      >
-                        {vendor.status === 'Pending Approval' ? 'Pending' : vendor.status}
-                      </button>
-                    </td>
-
-                    {/* Actions: View Details + Delete (Clean icons, no bg box) */}
-                    <td className="py-3 px-3.5 whitespace-nowrap text-right">
-                      <div className="flex items-center justify-end gap-1">
+                    <td className="py-3.5 px-4 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
                         <button
                           type="button"
-                          onClick={() => {
-                            setSelectedVendorForDetails(vendor);
-                            setIsDetailsModalOpen(true);
-                          }}
-                          className="p-1.5 rounded-[4px] text-blue-600 dark:text-blue-400 hover:text-blue-700 hover:bg-blue-50/50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                          title="View Vendor Details"
+                          onClick={() => handleOpenDetails(vendor.id)}
+                          className="p-1.5 rounded-[4px] text-slate-500 hover:text-blue-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                          title="View Completed Tours, Payouts & Details"
                         >
                           <Eye className="w-4 h-4" />
                         </button>
+
                         <button
                           type="button"
                           onClick={() => setDeleteTargetVendor(vendor)}
-                          className="p-1.5 rounded-[4px] text-rose-500 hover:text-rose-600 hover:bg-rose-50/50 dark:hover:bg-slate-800 cursor-pointer transition-colors"
-                          title="Remove vendor"
+                          className="p-1.5 rounded-[4px] text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
+                          title="Delete Vendor"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={9} className="py-12 text-center text-slate-400">
+                    <Building className="w-8 h-8 mx-auto text-slate-300 dark:text-slate-600 mb-2" />
+                    <p className="font-semibold text-sm">No partner vendors found</p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Try clearing filters or click "Register Vendor" to add a new partner.
+                    </p>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
 
-          {/* Table Bottom Industrial Pagination / Counter Bar */}
-          <div
-            className={`px-4 py-3 border-t flex flex-col sm:flex-row items-center justify-between gap-3 text-xs ${theme === 'dark' ? 'bg-slate-900/90 border-slate-800' : 'bg-slate-50 border-slate-200'
-              }`}
-          >
-            <div className="text-slate-500 text-xs">
-              Showing <span className="font-semibold text-slate-800 dark:text-slate-200">{filteredVendors.length > 0 ? 1 : 0}</span> to{' '}
-              <span className="font-semibold text-slate-800 dark:text-slate-200">{filteredVendors.length}</span> of{' '}
-              <span className="font-semibold text-slate-800 dark:text-slate-200">{vendors.length}</span> vendor partners
+        {vendorsData && vendorsData.totalPages > 1 && (
+          <div className="flex items-center justify-between text-xs text-slate-500 pt-2">
+            <div>
+              Showing Page {vendorsData.page} of {vendorsData.totalPages} ({vendorsData.total} partners)
             </div>
-
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1">
               <button
-                disabled
-                className="px-2.5 py-1 rounded-[4px] border border-slate-200 dark:border-slate-700 text-slate-400 opacity-60 text-xs font-semibold cursor-not-allowed"
+                type="button"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                className="px-2.5 py-1 rounded-[4px] border border-slate-200 dark:border-slate-700 disabled:opacity-40 cursor-pointer"
               >
                 Previous
               </button>
-              <button className="px-2.5 py-1 rounded-[4px] bg-blue-600 text-white text-xs font-semibold shadow-xs cursor-pointer">
-                1
-              </button>
               <button
-                disabled
-                className="px-2.5 py-1 rounded-[4px] border border-slate-200 dark:border-slate-700 text-slate-400 opacity-60 text-xs font-semibold cursor-not-allowed"
+                type="button"
+                disabled={page >= vendorsData.totalPages}
+                onClick={() => setPage((p) => p + 1)}
+                className="px-2.5 py-1 rounded-[4px] border border-slate-200 dark:border-slate-700 disabled:opacity-40 cursor-pointer"
               >
                 Next
               </button>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
-
-
-      {/* MODAL 1: EDIT DESTINATION TERRITORY ACCESS */}
-      {editingVendorForDest && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60">
-          <div
-            className={`w-full max-w-md rounded-[4px] border p-6 ${theme === 'dark'
-              ? 'bg-slate-900 border-slate-800 text-white'
-              : 'bg-white border-slate-200 text-slate-900'
-              }`}
-          >
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
-              <div>
-                <h3 className="font-semibold text-base">Configure Destination Access</h3>
-                <p className="text-xs text-slate-500">{editingVendorForDest.businessName}</p>
-              </div>
-              <button
-                onClick={() => setEditingVendorForDest(null)}
-                className="p-1 rounded-[4px] text-slate-400 hover:text-slate-600 dark:hover:text-white"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveDestinations} className="mt-4 space-y-4">
-              <p className="text-xs text-slate-600 dark:text-slate-400">
-                Select which destination territories this vendor is permitted to view and accept leads for. Leads outside these regions will be strictly hidden:
-              </p>
-
-              <div className="space-y-2">
-                {SUPPORTED_DESTINATIONS.map((dest) => {
-                  const isChecked = selectedDestList.includes(dest);
-                  return (
-                    <div
-                      key={dest}
-                      onClick={() => handleToggleDestCheckbox(dest)}
-                      className={`p-3 rounded-[4px] border cursor-pointer flex items-center justify-between transition-colors ${isChecked
-                        ? 'border-blue-600 bg-blue-50/60 dark:bg-blue-950/30'
-                        : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800'
-                        }`}
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <div
-                          className={`w-4 h-4 rounded-[2px] border flex items-center justify-center ${isChecked
-                            ? 'bg-blue-600 border-blue-600 text-white'
-                            : 'border-slate-400'
-                            }`}
-                        >
-                          {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
-                        </div>
-                        <span className="font-semibold text-sm">{dest}</span>
-                      </div>
-                      <span
-                        className={`text-xs px-2 py-0.5 rounded-[4px] border font-semibold ${getDestinationBadgeStyle(
-                          dest
-                        )}`}
-                      >
-                        Territory
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200 dark:border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setEditingVendorForDest(null)}
-                  className="px-4 py-2 text-sm font-semibold rounded-[4px] text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-[4px]"
-                >
-                  Save Territories
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL 2: REGISTER VENDOR PARTNER WITH DESTINATION SELECTION */}
       {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
           <div
-            className={`w-full max-w-lg rounded-[4px] border p-6 max-h-[90vh] overflow-y-auto ${theme === 'dark'
-              ? 'bg-slate-900 border-slate-800 text-white'
-              : 'bg-white border-slate-200 text-slate-900'
+            className={`w-full max-w-xl rounded-[4px] border shadow-2xl p-6 max-h-[90vh] overflow-y-auto ${theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-900'
               }`}
           >
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
-              <h3 className="font-semibold text-base">Register Vendor Partner</h3>
+              <div>
+                <h3 className="text-base font-bold">Register Vendor Partner</h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Creates an authorized agency partner and sends an onboarding invitation
+                </p>
+              </div>
               <button
+                type="button"
                 onClick={() => setIsAddModalOpen(false)}
-                className="p-1 rounded-[4px] text-slate-400 hover:text-slate-600 dark:hover:text-white"
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleAddSubmit} className="mt-4 space-y-3">
-              {/* Destination Territories Dropdown */}
-              <div>
-                <label className="block text-sm font-semibold mb-1">
-                  Assigned Destination Territories (Access Control)
-                </label>
-                <select
-                  value={assignedDestinations[0] || 'Kashmir'}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    if (val === 'All') {
-                      setAssignedDestinations([...SUPPORTED_DESTINATIONS]);
-                    } else {
-                      setAssignedDestinations([val]);
-                    }
-                  }}
-                  className={`w-full p-2.5 text-sm rounded-[4px] border outline-none cursor-pointer ${theme === 'dark'
-                    ? 'bg-slate-800 border-slate-700 text-white'
-                    : 'bg-slate-50 border-slate-200 text-slate-900'
-                    }`}
-                >
-                  {SUPPORTED_DESTINATIONS.map((dest) => (
-                    <option key={dest} value={dest}>
-                      {dest} Territory Access
-                    </option>
-                  ))}
-                  <option value="All">All Territories (All 5 Destinations)</option>
-                </select>
+            {formError && (
+              <div className="mt-4 p-2.5 rounded-[4px] bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{formError}</span>
               </div>
+            )}
 
-
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-semibold mb-1">Contact Person</label>
+            <form onSubmit={handleRegisterSubmit} className="space-y-4 mt-4 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="sm:col-span-2">
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                    Business / Agency Name *
+                  </label>
                   <input
                     type="text"
                     required
-                    placeholder="Full name"
-                    value={contactPerson}
-                    onChange={(e) => setContactPerson(e.target.value)}
-                    className={`w-full p-2.5 text-sm rounded-[4px] border outline-none ${theme === 'dark'
-                      ? 'bg-slate-800 border-slate-700 text-white'
-                      : 'bg-slate-50 border-slate-200 text-slate-900'
-                      }`}
+                    value={businessName}
+                    onChange={(e) => setBusinessName(e.target.value)}
+                    placeholder="e.g. Himalayan Trailblazers Pvt Ltd"
+                    className="w-full px-3 py-2 rounded-[4px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-semibold mb-1">Category</label>
-                  <select
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value as any)}
-                    className={`w-full p-2.5 text-sm rounded-[4px] border outline-none ${theme === 'dark'
-                      ? 'bg-slate-800 border-slate-700 text-white'
-                      : 'bg-slate-50 border-slate-200 text-slate-900'
-                      }`}
-                  >
-                    <option value="Tour Operator">Tour Operator</option>
-                    <option value="Resort & Hotel">Resort & Hotel</option>
-                    <option value="Transport & Fleet">Transport & Fleet</option>
-                    <option value="Adventure Guide">Adventure Guide</option>
-                  </select>
-                </div>
-              </div>
 
-              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-semibold mb-1">Email (Login ID)</label>
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                    Contact Person Name *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={contactPerson}
+                    onChange={(e) => setContactPerson(e.target.value)}
+                    placeholder="e.g. Ramesh Sharma"
+                    className="w-full px-3 py-2 rounded-[4px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                    Official Login Email *
+                  </label>
                   <input
                     type="email"
                     required
-                    placeholder="vendor@company.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className={`w-full p-2.5 text-sm rounded-[4px] border outline-none ${theme === 'dark'
-                      ? 'bg-slate-800 border-slate-700 text-white'
-                      : 'bg-slate-50 border-slate-200 text-slate-900'
-                      }`}
+                    placeholder="partner@agency.com"
+                    className="w-full px-3 py-2 rounded-[4px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
                   />
                 </div>
+
                 <div>
-                  <label className="block text-sm font-semibold mb-1">Phone</label>
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                    Official Contact Phone *
+                  </label>
                   <input
-                    type="text"
-                    placeholder="+91..."
+                    type="tel"
+                    required
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    className={`w-full p-2.5 text-sm rounded-[4px] border outline-none ${theme === 'dark'
-                      ? 'bg-slate-800 border-slate-700 text-white'
-                      : 'bg-slate-50 border-slate-200 text-slate-900'
-                      }`}
+                    placeholder="+91 98765 43210"
+                    className="w-full px-3 py-2 rounded-[4px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
                   />
                 </div>
-              </div>
 
-              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-semibold mb-1">Commission Rate (%)</label>
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                    Base City / Location *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
+                    placeholder="e.g. Srinagar, Kashmir"
+                    className="w-full px-3 py-2 rounded-[4px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                    Partner Category
+                  </label>
+                  <select
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value as VendorCategory)}
+                    className="w-full px-3 py-2 rounded-[4px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                  >
+                    <option value="tour_operator">Tour Operator</option>
+                    <option value="resort_hotel">Resort & Hotel</option>
+                    <option value="transport_fleet">Transport & Fleet</option>
+                    <option value="adventure_guide">Adventure Guide</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                    Default Commission (%)
+                  </label>
                   <input
                     type="number"
-                    value={commissionRate}
-                    onChange={(e) => setCommissionRate(Number(e.target.value))}
-                    className={`w-full p-2.5 text-sm rounded-[4px] border outline-none ${theme === 'dark'
-                      ? 'bg-slate-800 border-slate-700 text-white'
-                      : 'bg-slate-50 border-slate-200 text-slate-900'
-                      }`}
+                    min="0"
+                    max="100"
+                    value={commissionPercent}
+                    onChange={(e) => setCommissionPercent(Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)))}
+                    className="w-full px-3 py-2 rounded-[4px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
                   />
                 </div>
+
                 <div>
-                  <label className="block text-sm font-semibold mb-1">Portal Role</label>
+                  <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                    Primary Member Role
+                  </label>
                   <select
                     value={portalRole}
-                    onChange={(e) => setPortalRole(e.target.value as any)}
-                    className={`w-full p-2.5 text-sm rounded-[4px] border outline-none ${theme === 'dark'
-                      ? 'bg-slate-800 border-slate-700 text-white'
-                      : 'bg-slate-50 border-slate-200 text-slate-900'
-                      }`}
+                    onChange={(e) => setPortalRole(e.target.value as VendorPortalRole)}
+                    className="w-full px-3 py-2 rounded-[4px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
                   >
-                    <option value="Vendor Admin">Vendor Admin</option>
-                    <option value="Vendor Manager">Vendor Manager</option>
-                    <option value="Staff">Staff</option>
+                    <option value="vendor_admin">Vendor Admin</option>
+                    <option value="vendor_manager">Vendor Manager</option>
+                    <option value="staff">Staff</option>
                   </select>
+                </div>
+
+                <div className="flex items-center gap-2 pt-6">
+                  <input
+                    type="checkbox"
+                    id="portalAccessToggle"
+                    checked={portalAccess}
+                    onChange={(e) => setPortalAccess(e.target.checked)}
+                    className="rounded-[4px] text-blue-600 w-4 h-4 cursor-pointer"
+                  />
+                  <label htmlFor="portalAccessToggle" className="text-xs font-semibold cursor-pointer">
+                    Enable Portal Access immediately
+                  </label>
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-semibold mb-1">Location</label>
-                <input
-                  type="text"
-                  placeholder="City, State / Region"
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  className={`w-full p-2.5 text-sm rounded-[4px] border outline-none ${theme === 'dark'
-                    ? 'bg-slate-800 border-slate-700 text-white'
-                    : 'bg-slate-50 border-slate-200 text-slate-900'
-                    }`}
+                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
+                  Authorized Destination Territories
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 p-3 rounded-[4px] border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/30 max-h-40 overflow-y-auto">
+                  {destinationsList.map((dest) => {
+                    const checked = regDestinationIds.includes(dest.id);
+                    return (
+                      <label
+                        key={dest.id}
+                        className="flex items-center gap-2 text-xs cursor-pointer select-none"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setRegDestinationIds([...regDestinationIds, dest.id]);
+                            } else {
+                              setRegDestinationIds(regDestinationIds.filter((id) => id !== dest.id));
+                            }
+                          }}
+                          className="rounded-[4px] text-blue-600 w-3.5 h-3.5"
+                        />
+                        <span className="truncate">{dest.name}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
+                  Internal Notes (Optional)
+                </label>
+                <textarea
+                  rows={2}
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Specialization, contact notes, vehicle fleet info, etc."
+                  className="w-full px-3 py-2 rounded-[4px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
                 />
               </div>
 
-
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200 dark:border-slate-800">
+              <div className="flex justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
                 <button
                   type="button"
                   onClick={() => setIsAddModalOpen(false)}
-                  className="px-4 py-2 text-sm font-semibold rounded-[4px] text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  className="px-4 py-2 rounded-[4px] border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-[4px]"
+                  disabled={createVendorMutation.isPending}
+                  className="px-5 py-2 rounded-[4px] bg-blue-600 text-white font-semibold hover:bg-blue-700 cursor-pointer disabled:opacity-50"
                 >
-                  Add Vendor
+                  {createVendorMutation.isPending ? 'Registering...' : 'Register Partner'}
                 </button>
               </div>
             </form>
@@ -927,131 +915,197 @@ export const VendorPortalView: React.FC<VendorPortalViewProps> = ({
         </div>
       )}
 
-      {/* Generated Credentials Success Confirmation Pop Up */}
       {registeredSuccessVendor && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
           <div
-            className={`w-full max-w-md rounded-[4px] border p-5 sm:p-6 shadow-xl ${theme === 'dark'
-              ? 'bg-slate-900 border-slate-800 text-white'
-              : 'bg-white border-slate-200 text-slate-900'
+            className={`w-full max-w-md rounded-[4px] border shadow-2xl p-6 ${theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-900'
+              }`}
+          >
+            <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-300 flex items-center justify-center mx-auto mb-3">
+              <CheckCircle2 className="w-6 h-6" />
+            </div>
+
+            <h3 className="text-base font-bold text-center">Vendor Partner Registered</h3>
+            <p className="text-xs text-slate-500 text-center mt-1">
+              Partner record created for <strong className="text-slate-800 dark:text-slate-200">{registeredSuccessVendor.businessName}</strong>.
+            </p>
+
+            <div className="mt-4 p-4 rounded-[4px] border space-y-3 bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400">Partner Code:</span>
+                <span className="font-mono font-bold text-slate-900 dark:text-white">
+                  {registeredSuccessVendor.code}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400">Registration ID:</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="font-mono font-bold text-blue-600 dark:text-blue-400">
+                    {registeredSuccessVendor.registrationId}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(registeredSuccessVendor.registrationId, 'regId')}
+                    className="text-slate-400 hover:text-slate-600 cursor-pointer"
+                  >
+                    {copiedField === 'regId' ? (
+                      <Check className="w-3.5 h-3.5 text-emerald-500" />
+                    ) : (
+                      <Copy className="w-3.5 h-3.5" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-slate-400">Login Email:</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="font-semibold text-slate-800 dark:text-slate-200">
+                    {registeredSuccessVendor.email}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(registeredSuccessVendor.email, 'email')}
+                    className="text-slate-400 hover:text-slate-600 cursor-pointer"
+                  >
+                    {copiedField === 'email' ? (
+                      <Check className="w-3.5 h-3.5 text-emerald-500" />
+                    ) : (
+                      <Copy className="w-3.5 h-3.5" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {registeredSuccessVendor.destinations.length > 0 && (
+                <div>
+                  <span className="text-slate-400 block mb-1">Territories:</span>
+                  <div className="flex flex-wrap gap-1">
+                    {registeredSuccessVendor.destinations.map((d) => (
+                      <span
+                        key={d}
+                        className={`text-[10px] font-semibold px-2 py-0.5 rounded-[4px] border ${getDestinationBadgeStyle(
+                          d
+                        )}`}
+                      >
+                        {d}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-4 p-3 rounded-[4px] bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/40 text-blue-800 dark:text-blue-300 text-xs">
+              Portal invitation will be sent when the vendor portal launches.
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setRegisteredSuccessVendor(null)}
+              className="w-full mt-5 py-2 rounded-[4px] bg-slate-900 text-white dark:bg-slate-700 dark:text-white font-semibold text-xs hover:bg-slate-800 cursor-pointer"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+
+      {editingVendorForDest && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs">
+          <div
+            className={`w-full max-w-md rounded-[4px] border shadow-2xl p-6 ${theme === 'dark' ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-900'
               }`}
           >
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
-              <div className="flex items-center gap-2">
-                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                <h3 className="font-semibold text-base">Vendor Registered Successfully</h3>
-              </div>
+              <h3 className="text-base font-bold">Edit Destination Territories</h3>
               <button
-                onClick={() => setRegisteredSuccessVendor(null)}
-                className="p-1 rounded-[4px] text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer"
+                type="button"
+                onClick={() => setEditingVendorForDest(null)}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="mt-4 space-y-3.5">
-              <p className="text-xs text-slate-500">
-                Vendor partner credentials generated for portal access. Share these details with the vendor:
-              </p>
+            <p className="text-xs text-slate-500 mt-2">
+              Select all destination territories serviced by <strong>{editingVendorForDest.name}</strong>:
+            </p>
 
-              <div
-                className={`p-3.5 rounded-[4px] border space-y-2.5 ${theme === 'dark'
-                  ? 'bg-slate-800/80 border-slate-700'
-                  : 'bg-slate-50 border-slate-200'
-                  }`}
+            <div className="space-y-2.5 mt-4 max-h-60 overflow-y-auto p-1">
+              {destinationsList.map((dest) => {
+                const checked = selectedDestIds.includes(dest.id);
+                return (
+                  <label
+                    key={dest.id}
+                    className={`flex items-center justify-between p-2.5 rounded-[4px] border text-xs cursor-pointer transition-colors ${checked
+                      ? 'border-blue-500 bg-blue-50/60 dark:bg-blue-950/40 dark:border-blue-800'
+                      : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
+                      }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedDestIds([...selectedDestIds, dest.id]);
+                          } else {
+                            setSelectedDestIds(selectedDestIds.filter((id) => id !== dest.id));
+                          }
+                        }}
+                        className="rounded-[4px] text-blue-600 w-4 h-4 cursor-pointer"
+                      />
+                      <span className="font-semibold">{dest.name}</span>
+                    </div>
+                    {dest.region && (
+                      <span className="text-[11px] text-slate-400">{dest.region}</span>
+                    )}
+                  </label>
+                );
+              })}
+            </div>
+
+            <div className="flex justify-end gap-2 pt-4 mt-4 border-t border-slate-200 dark:border-slate-800 text-xs">
+              <button
+                type="button"
+                onClick={() => setEditingVendorForDest(null)}
+                className="px-4 py-2 rounded-[4px] border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-semibold cursor-pointer"
               >
-                <div>
-                  <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
-                    Vendor Partner
-                  </span>
-                  <p className="text-sm font-semibold">{registeredSuccessVendor.name}</p>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
-                      Registration ID
-                    </span>
-                    <p className="text-xs font-mono font-bold text-blue-600 dark:text-blue-400">
-                      {registeredSuccessVendor.regId}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
-                      Territory Access
-                    </span>
-                    <p className="text-xs font-semibold">{registeredSuccessVendor.dest}</p>
-                  </div>
-                </div>
-                <div>
-                  <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
-                    Portal Login Email
-                  </span>
-                  <p className="text-xs font-mono font-semibold">{registeredSuccessVendor.email}</p>
-                </div>
-                <div>
-                  <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
-                    Portal Password
-                  </span>
-                  <p className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                    {registeredSuccessVendor.password}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const text = `KrikoTrip Vendor Partner Credentials\nVendor: ${registeredSuccessVendor.name}\nRegistration ID: ${registeredSuccessVendor.regId}\nLogin Email: ${registeredSuccessVendor.email}\nPassword: ${registeredSuccessVendor.password}\nTerritory Access: ${registeredSuccessVendor.dest}`;
-                    copyToClipboard(text, 'all');
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-[4px] border border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 cursor-pointer"
-                >
-                  {copiedField === 'all' ? (
-                    <Check className="w-3.5 h-3.5 text-emerald-600" />
-                  ) : (
-                    <Copy className="w-3.5 h-3.5" />
-                  )}
-                  <span>{copiedField === 'all' ? 'Copied All!' : 'Copy Credentials'}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRegisteredSuccessVendor(null)}
-                  className="px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-[4px] cursor-pointer"
-                >
-                  Done
-                </button>
-              </div>
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={updateTerritoriesMutation.isPending}
+                onClick={handleSaveDestinations}
+                className="px-5 py-2 rounded-[4px] bg-blue-600 text-white font-semibold hover:bg-blue-700 cursor-pointer disabled:opacity-50"
+              >
+                {updateTerritoriesMutation.isPending ? 'Saving...' : 'Save Territories'}
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Vendor Details & Completed Tours Modal */}
       <VendorDetailsModal
         isOpen={isDetailsModalOpen}
         onClose={() => {
           setIsDetailsModalOpen(false);
-          setSelectedVendorForDetails(null);
+          setSelectedVendorForDetailsId(null);
         }}
-        vendor={selectedVendorForDetails}
-        onTogglePortalAccess={onTogglePortalAccess}
-        onOpenDestModal={handleOpenDestModal}
+        vendorId={selectedVendorForDetailsId}
+        onOpenDestModal={(v) => handleOpenDestModal(v)}
       />
 
-      {/* Delete Confirmation Modal */}
       <DeleteConfirmModal
-        isOpen={!!deleteTargetVendor}
-        onClose={() => setDeleteTargetVendor(null)}
-        onConfirm={() => {
-          if (deleteTargetVendor) {
-            onDeleteVendor(deleteTargetVendor.id);
-            setDeleteTargetVendor(null);
-          }
-        }}
-        itemType="Vendor Account"
+        isOpen={Boolean(deleteTargetVendor)}
+        title="Delete Vendor Partner"
         itemName={deleteTargetVendor?.businessName}
-        warningMessage="This vendor account, authorized destination access, assigned lead pipelines, and portal credentials will be permanently deleted."
+        itemType="Vendor Partner"
+        warningMessage="This partner will no longer be assigned to new tour bookings."
+        onClose={() => setDeleteTargetVendor(null)}
+        onConfirm={handleConfirmDelete}
       />
     </div>
   );

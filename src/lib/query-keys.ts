@@ -34,6 +34,9 @@ export const queryKeys = {
     all: ['vendors'] as const,
     list: (filters?: Record<string, unknown>) => ['vendors', 'list', filters] as const,
     detail: (id: string) => ['vendors', 'detail', id] as const,
+    members: (id: string) => ['vendors', 'members', id] as const,
+    payouts: (id: string) => ['vendors', 'payouts', id] as const,
+    completedTours: (id: string) => ['vendors', 'completed-tours', id] as const,
   },
   reviews: {
     all: ['reviews'] as const,

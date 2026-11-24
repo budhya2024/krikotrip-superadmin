@@ -28,10 +28,10 @@ import {
   ArrowRight,
   ShieldCheck,
   FileText,
+  Star,
 } from 'lucide-react';
 import type { Vendor } from '../../types';
 import { useTheme } from '../../context/ThemeContext';
-import { SUPPORTED_DESTINATIONS } from './VendorPortalView';
 import { DropdownFilter } from '../common/DropdownFilter';
 import { DeleteConfirmModal } from '../common/DeleteConfirmModal';
 import { calculateAdminQuote } from '../../lib/pricing';
@@ -50,6 +50,13 @@ import {
   type EnquirySource,
   type EnquiryPaymentStatus,
 } from '../../api/enquiries';
+import {
+  useVendorsQuery,
+  useAssignVendorLeadMutation,
+  useRecordVendorLeadResponseMutation,
+  useRecordVendorTourFeedbackMutation,
+} from '../../api/vendors';
+import { useDestinationsQuery } from '../../api/destinations';
 
 export interface BookingEnquiryViewProps {
   vendors?: Vendor[];
@@ -128,8 +135,21 @@ function getStatusBadge(status: EnquiryStatus) {
   }
 }
 
-export const BookingEnquiryView: React.FC<BookingEnquiryViewProps> = ({ vendors = [] }) => {
+export const BookingEnquiryView: React.FC<BookingEnquiryViewProps> = ({ vendors: propVendors = [] }) => {
   const { theme } = useTheme();
+
+  const vendorsQuery = useVendorsQuery({ limit: 100 });
+  const destinationsQuery = useDestinationsQuery();
+  const allVendors = vendorsQuery.data?.items || propVendors;
+  const destinationsList = destinationsQuery.data || [];
+
+  const assignVendorMutation = useAssignVendorLeadMutation();
+  const recordVendorResponseMutation = useRecordVendorLeadResponseMutation();
+  const recordVendorFeedbackMutation = useRecordVendorTourFeedbackMutation();
+
+  const [tourFeedbackRating, setTourFeedbackRating] = useState<number>(5);
+  const [tourFeedbackText, setTourFeedbackText] = useState<string>('');
+  const [vendorActionError, setVendorActionError] = useState<string | null>(null);
 
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [sourceFilter, setSourceFilter] = useState<string>('all');
@@ -372,6 +392,64 @@ export const BookingEnquiryView: React.FC<BookingEnquiryViewProps> = ({ vendors 
     }
   };
 
+  const handleAssignVendor = async () => {
+    if (!selectedEnquiryDetail) return;
+    try {
+      setVendorActionError(null);
+      await assignVendorMutation.mutateAsync({
+        enquiryId: selectedEnquiryDetail.id,
+        input: {
+          vendorId: tripForm.assignedVendorId || null,
+        },
+      });
+      setFeedbackMessage('Vendor partner assignment updated successfully!');
+      setTimeout(() => setFeedbackMessage(null), 3000);
+    } catch {
+      setVendorActionError('Failed to assign vendor partner.');
+    }
+  };
+
+  const handleRecordVendorResponse = async (decision: 'accepted' | 'declined') => {
+    if (!selectedEnquiryDetail) return;
+    try {
+      setVendorActionError(null);
+      await recordVendorResponseMutation.mutateAsync({
+        enquiryId: selectedEnquiryDetail.id,
+        input: {
+          decision,
+          note: `Admin recorded response on behalf of partner (${decision})`,
+        },
+      });
+      setFeedbackMessage(
+        decision === 'accepted'
+          ? 'Lead accepted! Booking moved to In Progress.'
+          : 'Lead declined by partner vendor.'
+      );
+      setTimeout(() => setFeedbackMessage(null), 3000);
+    } catch {
+      setVendorActionError('Failed to record partner lead response.');
+    }
+  };
+
+  const handleSubmitTourFeedback = async () => {
+    if (!selectedEnquiryDetail) return;
+    try {
+      setVendorActionError(null);
+      await recordVendorFeedbackMutation.mutateAsync({
+        enquiryId: selectedEnquiryDetail.id,
+        input: {
+          rating: tourFeedbackRating,
+          feedback: tourFeedbackText.trim() || null,
+        },
+      });
+      setFeedbackMessage('Vendor tour feedback recorded successfully!');
+      setTimeout(() => setFeedbackMessage(null), 3000);
+      setTourFeedbackText('');
+    } catch {
+      setVendorActionError('Failed to record tour feedback.');
+    }
+  };
+
   const handleSaveAdminNotes = async () => {
     if (!selectedEnquiryDetail) return;
     try {
@@ -414,11 +492,11 @@ export const BookingEnquiryView: React.FC<BookingEnquiryViewProps> = ({ vendors 
       icon: <Compass className="w-4 h-4 text-blue-600 dark:text-blue-400" />,
       badge: enquiriesList.length,
     },
-    ...SUPPORTED_DESTINATIONS.map((dest) => ({
-      value: dest,
-      label: dest,
+    ...destinationsList.map((dest) => ({
+      value: dest.name,
+      label: dest.name,
       icon: <MapPin className="w-4 h-4 text-blue-500" />,
-      badge: enquiriesList.filter((e) => e.destinationName === dest).length,
+      badge: enquiriesList.filter((e) => e.destinationName === dest.name).length,
     })),
   ];
 
@@ -1290,22 +1368,184 @@ export const BookingEnquiryView: React.FC<BookingEnquiryViewProps> = ({ vendors 
                       </div>
 
                       <div>
-                        <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">
-                          Assigned Vendor Partner
-                        </label>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                            Assigned Vendor Partner
+                          </label>
+                          <button
+                            type="button"
+                            disabled={assignVendorMutation.isPending}
+                            onClick={handleAssignVendor}
+                            className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold hover:underline cursor-pointer disabled:opacity-50"
+                          >
+                            {assignVendorMutation.isPending ? 'Assigning...' : 'Assign / Save Partner'}
+                          </button>
+                        </div>
+
                         <select
                           value={tripForm.assignedVendorId}
                           onChange={(e) => setTripForm({ ...tripForm, assignedVendorId: e.target.value })}
                           className="w-full px-2.5 py-1.5 rounded-[4px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
                         >
                           <option value="">No vendor assigned</option>
-                          {vendors.map((v) => (
-                            <option key={v.id} value={v.id}>
-                              {v.businessName} ({(v.assignedDestinations || []).join(', ')})
-                            </option>
-                          ))}
+                          {(() => {
+                            const enquiryDest = (selectedEnquiryDetail?.destinationName || '').toLowerCase();
+                            const authorized = allVendors.filter(
+                              (v) =>
+                                v.status === 'active' &&
+                                (v.assignedDestinations || []).some(
+                                  (d) =>
+                                    d.toLowerCase().includes(enquiryDest) ||
+                                    (enquiryDest && enquiryDest.includes(d.toLowerCase()))
+                                )
+                            );
+                            const others = allVendors.filter((v) => !authorized.some((av) => av.id === v.id));
+
+                            return (
+                              <>
+                                {authorized.length > 0 && (
+                                  <optgroup label="Authorized Partners (covers this territory)">
+                                    {authorized.map((v) => (
+                                      <option key={v.id} value={v.id}>
+                                        ★ {v.businessName} ({(v.assignedDestinations || []).join(', ')})
+                                      </option>
+                                    ))}
+                                  </optgroup>
+                                )}
+                                <optgroup label="Other Partners">
+                                  {others.map((v) => (
+                                    <option key={v.id} value={v.id}>
+                                      {v.businessName} ({(v.assignedDestinations || []).join(', ')})
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              </>
+                            );
+                          })()}
                         </select>
                       </div>
+
+                      {selectedEnquiryDetail?.assignedVendorId && (
+                        <div className="sm:col-span-2 p-3 rounded-[4px] bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-semibold text-slate-500">
+                              Vendor Lead Status:
+                            </span>
+                            {(() => {
+                              const leadStatus = (selectedEnquiryDetail.vendorLeadStatus || 'unassigned').toLowerCase().replace(/ /g, '_');
+                              if (leadStatus === 'accepted') {
+                                return (
+                                  <span className="px-2 py-0.5 rounded-[4px] bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-semibold text-[10px] flex items-center gap-1">
+                                    <Check className="w-3 h-3" />
+                                    Accepted by Partner
+                                  </span>
+                                );
+                              }
+                              if (leadStatus === 'declined') {
+                                return (
+                                  <span className="px-2 py-0.5 rounded-[4px] bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 font-semibold text-[10px] flex items-center gap-1">
+                                    <X className="w-3 h-3" />
+                                    Declined by Partner (Please Reassign)
+                                  </span>
+                                );
+                              }
+                              if (leadStatus === 'sent_to_vendor') {
+                                return (
+                                  <span className="px-2 py-0.5 rounded-[4px] bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 font-semibold text-[10px] flex items-center gap-1">
+                                    <Clock className="w-3 h-3" />
+                                    Sent to Partner (Awaiting Acceptance)
+                                  </span>
+                                );
+                              }
+                              return (
+                                <span className="px-2 py-0.5 rounded-[4px] bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300 font-semibold text-[10px]">
+                                  Unassigned
+                                </span>
+                              );
+                            })()}
+                          </div>
+
+                          {(selectedEnquiryDetail.vendorLeadStatus || '').toLowerCase().replace(/ /g, '_') === 'sent_to_vendor' && (
+                            <div className="flex items-center justify-between pt-1 border-t border-slate-200 dark:border-slate-700">
+                              <span className="text-[11px] text-slate-500">
+                                Record response on behalf of partner:
+                              </span>
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  disabled={recordVendorResponseMutation.isPending}
+                                  onClick={() => handleRecordVendorResponse('accepted')}
+                                  className="px-2.5 py-1 rounded-[4px] bg-emerald-600 text-white font-semibold text-[10px] hover:bg-emerald-700 cursor-pointer disabled:opacity-50"
+                                >
+                                  Accept on Behalf
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={recordVendorResponseMutation.isPending}
+                                  onClick={() => handleRecordVendorResponse('declined')}
+                                  className="px-2.5 py-1 rounded-[4px] bg-rose-600 text-white font-semibold text-[10px] hover:bg-rose-700 cursor-pointer disabled:opacity-50"
+                                >
+                                  Decline on Behalf
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {vendorActionError && (
+                            <div className="text-[11px] text-rose-600 dark:text-rose-400">
+                              {vendorActionError}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {selectedEnquiryDetail?.status === 'completed' && selectedEnquiryDetail?.assignedVendorId && (
+                        <div className="sm:col-span-2 p-3 rounded-[4px] bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/40 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-slate-800 dark:text-white flex items-center gap-1.5">
+                              <Star className="w-3.5 h-3.5 fill-amber-500 text-amber-500" />
+                              Vendor Partner Tour Feedback
+                            </span>
+                            <button
+                              type="button"
+                              disabled={recordVendorFeedbackMutation.isPending}
+                              onClick={handleSubmitTourFeedback}
+                              className="px-2.5 py-1 rounded-[4px] bg-amber-600 text-white font-semibold text-[10px] hover:bg-amber-700 cursor-pointer disabled:opacity-50"
+                            >
+                              {recordVendorFeedbackMutation.isPending ? 'Saving...' : 'Submit Tour Rating'}
+                            </button>
+                          </div>
+
+                          <div className="flex items-center gap-1">
+                            <span className="text-[11px] text-slate-500 mr-2">Tour Rating:</span>
+                            {[1, 2, 3, 4, 5].map((star) => (
+                              <button
+                                key={star}
+                                type="button"
+                                onClick={() => setTourFeedbackRating(star)}
+                                className="cursor-pointer"
+                              >
+                                <Star
+                                  className={`w-4 h-4 ${star <= tourFeedbackRating
+                                    ? 'fill-amber-500 text-amber-500'
+                                    : 'text-slate-300 dark:text-slate-600'
+                                    }`}
+                                />
+                              </button>
+                            ))}
+                          </div>
+
+                          <div>
+                            <input
+                              type="text"
+                              value={tourFeedbackText}
+                              onChange={(e) => setTourFeedbackText(e.target.value)}
+                              placeholder="Tour feedback comments (e.g. Excellent driver and punctual pickup)"
+                              className="w-full px-2.5 py-1.5 rounded-[4px] border border-amber-200 dark:border-amber-900/60 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs"
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
 

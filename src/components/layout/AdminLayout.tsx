@@ -6,12 +6,10 @@ import type {
   NavigationKey,
   Tour,
   BookingEnquiry,
-  Vendor,
 } from '../../types';
 import {
   mockTours,
   mockEnquiries,
-  mockVendors,
 } from '../../data/mockData';
 import { DashboardView } from '../views/DashboardView';
 import { HomePageView } from '../views/HomePageView';
@@ -67,8 +65,7 @@ export const AdminLayout: React.FC = () => {
   const [isAddTourModalOpen, setIsAddTourModalOpen] = useState(false);
 
   const [tours, setTours] = useState<Tour[]>(mockTours);
-  const [enquiries, setEnquiries] = useState<BookingEnquiry[]>(mockEnquiries);
-  const [vendors, setVendors] = useState<Vendor[]>(mockVendors);
+  const [enquiries] = useState<BookingEnquiry[]>(mockEnquiries);
 
   const handleAddTour = (newTour: Tour) => {
     setTours([newTour, ...tours]);
@@ -86,54 +83,6 @@ export const AdminLayout: React.FC = () => {
     setTours(
       tours.map((t) => (t.id === id ? { ...t, status: t.status === 'Published' ? 'Draft' : 'Published' } : t))
     );
-  };
-
-  const handleVendorLeadResponse = (enquiryId: string, response: 'Accepted' | 'Declined') => {
-    setEnquiries(
-      enquiries.map((e) =>
-        e.id === enquiryId
-          ? {
-            ...e,
-            vendorLeadStatus: response,
-            status: response === 'Accepted' ? 'In Progress' : e.status,
-          }
-          : e
-      )
-    );
-  };
-
-  const handleTogglePortalAccess = (id: string) => {
-    setVendors(
-      vendors.map((v) => (v.id === id ? { ...v, portalAccess: !v.portalAccess } : v))
-    );
-  };
-
-  const handleUpdateVendorStatus = (id: string, status: Vendor['status']) => {
-    setVendors(
-      vendors.map((v) => (v.id === id ? { ...v, status } : v))
-    );
-  };
-
-  const handleUpdateVendorDestinations = (vendorId: string, destinations: string[]) => {
-    setVendors(
-      vendors.map((v) =>
-        v.id === vendorId ? { ...v, assignedDestinations: destinations } : v
-      )
-    );
-  };
-
-  const handleAddVendor = (vendorData: Omit<Vendor, 'id' | 'createdAt' | 'toursListed'>) => {
-    const newVendor: Vendor = {
-      ...vendorData,
-      id: vendorData.registrationId || `VND-${300 + vendors.length + 1}`,
-      createdAt: 'Just now',
-      toursListed: 0,
-    };
-    setVendors([newVendor, ...vendors]);
-  };
-
-  const handleDeleteVendor = (id: string) => {
-    setVendors(vendors.filter((v) => v.id !== id));
   };
 
   const renderContent = () => {
@@ -161,20 +110,9 @@ export const AdminLayout: React.FC = () => {
           />
         );
       case 'booking-enquiries':
-        return <BookingEnquiryView vendors={vendors} />;
+        return <BookingEnquiryView />;
       case 'vendors':
-        return (
-          <VendorPortalView
-            vendors={vendors}
-            enquiries={enquiries}
-            onTogglePortalAccess={handleTogglePortalAccess}
-            onUpdateVendorStatus={handleUpdateVendorStatus}
-            onUpdateVendorDestinations={handleUpdateVendorDestinations}
-            onAddVendor={handleAddVendor}
-            onDeleteVendor={handleDeleteVendor}
-            onVendorLeadResponse={handleVendorLeadResponse}
-          />
-        );
+        return <VendorPortalView />;
       case 'reviews':
         return <ReviewsManagementView />;
       case 'blog':
